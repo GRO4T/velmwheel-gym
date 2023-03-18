@@ -1,6 +1,6 @@
 import gym
 
-from envs.velmwheel import VelmwheelEnv
+from velmwheel_gym.envs.velmwheel import VelmwheelEnv
 from stable_baselines3 import DQN
 from stable_baselines3.common.evaluation import evaluate_policy
 
