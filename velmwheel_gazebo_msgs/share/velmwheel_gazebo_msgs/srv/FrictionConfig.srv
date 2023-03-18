@@ -1,0 +1,21 @@
+# ====================================================================================================================================
+# @file       FrictionConfig.srv
+# @author     Krzysztof Pierczyk (krzysztof.pierczyk@gmail.com)
+# @maintainer Krzysztof Pierczyk (krzysztof.pierczyk@gmail.com)
+# @date       Thursday, 28th April 2022 7:10:38 pm
+# @modified   Wednesday, 25th May 2022 11:41:51 pm
+# @project    engineering-thesis
+# @brief      ROS Service requesting configruation of the friction simuilation parameters. Provideds informations about <mu1> and 
+#             <mu2> friction coefficients for the `ode` physics engine of Gazebo simulator
+#    
+#    
+# @see http://gazebosim.org/tutorials?tut=friction&cat=physics
+# @copyright Krzysztof Pierczyk © 2022
+# ====================================================================================================================================
+
+# Friction value of the vector parallel to the roll's axis (vector perpendicular to the rotation axis) [default: 1]; 
+float64 mu1
+# Friction value of the vector perpendicular to the roll's axis (vector of the rotation axis) [default: 0]; 
+float64 mu2
+
+---

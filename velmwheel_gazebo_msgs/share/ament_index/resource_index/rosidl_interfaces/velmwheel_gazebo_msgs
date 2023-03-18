@@ -1,0 +1,14 @@
+msg/ContactState.idl
+msg/ContactState.msg
+srv/FrictionConfig.idl
+srv/FrictionConfig.srv
+srv/FrictionConfig_Request.msg
+srv/FrictionConfig_Response.msg
+srv/InertiaConfig.idl
+srv/InertiaConfig.srv
+srv/InertiaConfig_Request.msg
+srv/InertiaConfig_Response.msg
+srv/VelocityConfig.idl
+srv/VelocityConfig.srv
+srv/VelocityConfig_Request.msg
+srv/VelocityConfig_Response.msg

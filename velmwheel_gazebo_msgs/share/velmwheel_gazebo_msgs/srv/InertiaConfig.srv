@@ -1,0 +1,22 @@
+# ====================================================================================================================================
+# @file       InertiaConfig.srv
+# @author     Krzysztof Pierczyk (krzysztof.pierczyk@gmail.com)
+# @maintainer Krzysztof Pierczyk (krzysztof.pierczyk@gmail.com)
+# @date       Thursday, 28th April 2022 7:10:38 pm
+# @modified   Wednesday, 25th May 2022 11:42:00 pm
+# @project    engineering-thesis
+# @brief      Configuration of mass, mass center and inertia momentum for robot model's components. Each component has a local mass 
+#             center in the approximated ravity center [?]
+#    
+#    
+# @copyright Krzysztof Pierczyk © 2022
+# ====================================================================================================================================
+
+# Inertia of the robot's bases
+geometry_msgs/Inertia base
+# Inertia of the robot's front part
+geometry_msgs/Inertia front
+# Inertia of a robot's wheel
+geometry_msgs/Inertia wheel
+
+---

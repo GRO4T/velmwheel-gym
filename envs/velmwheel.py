@@ -1,19 +1,24 @@
 import logging
 import enum
 import sys
+import time
+
+import numpy as np
 
 import gym
 import rclpy
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import PointCloud2
 from std_srvs.srv import Empty
-from gazebo_msgs.msg import ContactState
+
+# from velmwheel_gym_msgs.msg import ContactState
+from velmwheel_gazebo_msgs.msg import ContactState
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.DEBUG)
+handler.setLevel(logging.INFO)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -40,7 +45,7 @@ class VelmwheelEnv(gym.Env):
             "/velmwheel/base/velocity_setpoint",
             qos_profile=10,
         )
-        self._reset_sim = self._node.create_client(Empty, "/reset_simulation")
+        self._reset_sim = self._node.create_client(Empty, "/reset_world")
         self._observation_sub = self._node.create_subscription(
             PointCloud2,
             "/velmwheel/lidars/cloud/combined",
@@ -49,17 +54,34 @@ class VelmwheelEnv(gym.Env):
         )
         self._collision_sub = self._node.create_subscription(
             ContactState,
+            "/velmwheel/contacts",
+            self._collision_callback,
+            qos_profile=qos_profile_system_default,
         )
         # Class variables
         self._observation_msg = None
         self._action_time = None
 
-    def step(self, action: Actions):
-        self._move(action)
-        self._action_time = rclpy.clock.Clock().now().nanoseconds
-        self._observe()
+        self.action_space = gym.spaces.Discrete(5)
+        self.observation_space = gym.spaces.Box(
+            low=0, high=255, shape=(34560,), dtype=np.uint8
+        )
 
-        obs = self._observation_msg.data
+        self._action_to_direction = {
+            0: [0.0, 0.0],
+            1: [1.0, 0.0],
+            2: [-1.0, 0.0],
+            3: [0.0, 1.0],
+            4: [0.0, -1.0],
+        }
+
+    def step(self, action: Actions):
+        print(action)
+        self._move(action)
+        time.sleep(1)
+        self._action_time = rclpy.clock.Clock().now().nanoseconds
+
+        obs = self._observe()
         reward = 1
         done = False
         info = {}
@@ -67,6 +89,7 @@ class VelmwheelEnv(gym.Env):
         return obs, reward, done, info
 
     def reset(self):
+        print("reset")
         while not self._reset_sim.wait_for_service(timeout_sec=1.0):
             logger.info("/reset_simulation service not available, waiting again...")
 
@@ -75,10 +98,7 @@ class VelmwheelEnv(gym.Env):
 
         self._action_time = rclpy.clock.Clock().now().nanoseconds
 
-        self._observe()
-        obs = self._observation_msg.data
-
-        return obs
+        return self._observe()
 
     def close(self):
         logger.info("Closing " + self.__class__.__name__ + " environment.")
@@ -86,41 +106,28 @@ class VelmwheelEnv(gym.Env):
         self._node.destroy_node()
         rclpy.shutdown()
 
-    def _move(self, action: Actions):
+    def _move(self, action):
         motion_cmd = Twist()
 
-        if action == VelmwheelEnv.Actions.FORWARD:
-            motion_cmd.linear.x = 1.0
-        elif action == VelmwheelEnv.Actions.BACKWARD:
-            motion_cmd.linear.x = -1.0
-        elif action == VelmwheelEnv.Actions.LEFT:
-            motion_cmd.linear.y = 1.0
-        elif action == VelmwheelEnv.Actions.RIGHT:
-            motion_cmd.linear.y = -1.0
+        direction = self._action_to_direction[action]
+        motion_cmd.linear.x = direction[0]
+        motion_cmd.linear.y = direction[1]
 
         self._movement_pub.publish(motion_cmd)
         logger.debug("Publishing movement commmand: %s" % str(motion_cmd))
 
     def _observe(self) -> any:
         rclpy.spin_once(self._node)
-        # while self._observation_msg is None or self._is_observation_prior_to_action():
-        #     rclpy.spin_once(self._node)
-
-    # This does not work probably because NTP server is not running
-    # def _is_observation_prior_to_action(self) -> bool:
-    # observation_time = int(
-    #     str(self._observation_msg.header.stamp.sec)
-    #     + (str(self._observation_msg.header.stamp.nanosec))
-    # )
-    # logger.debug(f"observation_time_secs={self._observation_msg.header.stamp.sec}")
-    # logger.debug(
-    #     f"observation_time_nsecs={self._observation_msg.header.stamp.nanosec}"
-    # )
-    # logger.debug(f"observation={self._observation_msg.__dir__}")
-    # logger.debug(f"{observation_time=}")
-    # logger.debug(f"{self._action_time=}")
-    # return observation_time < self._action_time
+        while self._observation_msg is None:
+            rclpy.spin_once(self._node)
+        obs = self._observation_msg.data
+        obs = np.array(obs)
+        return obs
 
     def _observation_callback(self, message):
         self._observation_msg = message
         logger.debug("Received observation")
+
+    def _collision_callback(self, message):
+        self._collision_msg = message
+        logger.debug(f"Received collision msg: {message}")

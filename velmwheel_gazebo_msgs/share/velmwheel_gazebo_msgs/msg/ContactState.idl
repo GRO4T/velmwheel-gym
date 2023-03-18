@@ -1,0 +1,22 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from velmwheel_gazebo_msgs/msg/ContactState.msg
+// generated code does not contain a copyright notice
+
+
+module velmwheel_gazebo_msgs {
+  module msg {
+    struct ContactState {
+      @verbatim (language="comment", text=
+        "text info on this contact")
+      string info;
+
+      @verbatim (language="comment", text=
+        "name of contact collision1")
+      string collision1_name;
+
+      @verbatim (language="comment", text=
+        "name of contact collision2")
+      string collision2_name;
+    };
+  };
+};

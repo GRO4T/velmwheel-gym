@@ -1,0 +1,23 @@
+# ====================================================================================================================================
+# @file       VelocityConfig.srv
+# @author     Krzysztof Pierczyk (krzysztof.pierczyk@gmail.com)
+# @maintainer Krzysztof Pierczyk (krzysztof.pierczyk@gmail.com)
+# @date       Thursday, 28th April 2022 7:10:38 pm
+# @modified   Wednesday, 25th May 2022 4:44:01 pm
+# @project    engineering-thesis
+# @brief      Service requesting instantenous configuration of the setpoints for angular velocities of robot's wheels
+#    
+#    
+# @copyright Krzysztof Pierczyk © 2022
+# ====================================================================================================================================
+
+# Setpoint angular velocity of the front right wheel in [rad/s]
+float64 fr
+# Setpoint angular velocity of the front left wheel in [rad/s]
+float64 fl
+# Setpoint angular velocity of the rear right wheel in [rad/s]
+float64 rl
+# Setpoint angular velocity of the rear left wheel in [rad/s]
+float64 rr
+
+---

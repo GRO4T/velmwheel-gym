@@ -1,0 +1,46 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from velmwheel_gazebo_msgs/srv/VelocityConfig.srv
+// generated code does not contain a copyright notice
+
+
+module velmwheel_gazebo_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "====================================================================================================================================" "\n"
+      "@file       VelocityConfig.srv" "\n"
+      "@author     Krzysztof Pierczyk (krzysztof.pierczyk@gmail.com)" "\n"
+      "@maintainer Krzysztof Pierczyk (krzysztof.pierczyk@gmail.com)" "\n"
+      "@date       Thursday, 28th April 2022 7:10:38 pm" "\n"
+      "@modified   Wednesday, 25th May 2022 4:44:01 pm" "\n"
+      "@project    engineering-thesis" "\n"
+      "@brief      Service requesting instantenous configuration of the setpoints for angular velocities of robot's wheels" "\n"
+      "" "\n"
+      "" "\n"
+      "@copyright Krzysztof Pierczyk © 2022" "\n"
+      "====================================================================================================================================")
+    struct VelocityConfig_Request {
+      @verbatim (language="comment", text=
+        "Setpoint angular velocity of the front right wheel in")
+      @unit (value="rad/s")
+      double fr;
+
+      @verbatim (language="comment", text=
+        "Setpoint angular velocity of the front left wheel in")
+      @unit (value="rad/s")
+      double fl;
+
+      @verbatim (language="comment", text=
+        "Setpoint angular velocity of the rear right wheel in")
+      @unit (value="rad/s")
+      double rl;
+
+      @verbatim (language="comment", text=
+        "Setpoint angular velocity of the rear left wheel in")
+      @unit (value="rad/s")
+      double rr;
+    };
+    struct VelocityConfig_Response {
+      uint8 structure_needs_at_least_one_member;
+    };
+  };
+};
