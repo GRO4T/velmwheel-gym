@@ -1,6 +1,5 @@
 import logging
 import sys
-import os
 
 import numpy as np
 
@@ -11,16 +10,8 @@ from std_srvs.srv import Empty
 from velmwheel_gym.robot import VelmwheelRobot
 from velmwheel_gym.reward import VelmwheelReward
 
-# from velmwheel_gym_msgs.msg import ContactState
-from velmwheel_gazebo_msgs.msg import ContactState
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 
 class VelmwheelEnv(gym.Env):

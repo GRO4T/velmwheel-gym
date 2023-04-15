@@ -1,10 +1,14 @@
 import gym
-
-from velmwheel_gym.envs.velmwheel import VelmwheelEnv
 from stable_baselines3 import DQN
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import HParam
+
+from velmwheel_gym.envs.velmwheel import VelmwheelEnv
+from velmwheel_gym.logger import init_logging
+
+
+init_logging()
 
 
 # env = gym.make("Velmwheel-v0")
@@ -15,7 +19,7 @@ model = DQN(
     "MlpPolicy",
     env,
     verbose=1,
-    tensorboard_log="./tensorboard_logs",
+    tensorboard_log="./logs/tensorboard",
     learning_starts=0,
     target_update_interval=1000,
     # batch_size=1,
