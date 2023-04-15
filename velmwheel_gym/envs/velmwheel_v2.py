@@ -23,7 +23,7 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
-class VelmwheelEnv(gym.Env):
+class VelmwheelEnvV2(gym.Env):
     def __init__(self):
         super().__init__()
         # Initialize and configure ROS2 node
@@ -36,14 +36,16 @@ class VelmwheelEnv(gym.Env):
 
         self.action_space = gym.spaces.Discrete(5)
         self.observation_space = gym.spaces.Box(
-            low=0, high=255, shape=(34560,), dtype=np.uint8
+            low=-100.0, high=100.0, shape=(2,), dtype=np.float64
         )
 
     def step(self, action):
         self._robot.move(action)
         self._robot.update()
 
-        obs = self._robot.get_lidar_data()
+        pos = self._robot.get_position()
+        x = [pos.x, pos.y]
+        obs = x
         reward = self._reward.calculate()
         done = self._robot.is_collide() or self._reward.is_done()
         info = {}
@@ -60,7 +62,9 @@ class VelmwheelEnv(gym.Env):
         self._robot.reset()
         self._robot.update()
 
-        return self._robot.get_lidar_data()
+        pos = self._robot.get_position()
+        x = [pos.x, pos.y]
+        return x
 
     def close(self):
         logger.info("Closing " + self.__class__.__name__ + " environment.")

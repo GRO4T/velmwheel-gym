@@ -4,3 +4,5 @@
 **/install
 **/build
 **/log
+*.log
+**/logs/tensorboard/**
