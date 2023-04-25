@@ -1,4 +1,4 @@
-""" Observation is robot position """
+""" TODO(kolasdam): write docstring. """
 import logging
 import math
 
@@ -8,14 +8,13 @@ import gym
 import rclpy
 from std_srvs.srv import Empty
 
-from velmwheel_gym.robot_v2 import VelmwheelRobotV2
-from velmwheel_gym.reward import VelmwheelReward
+from velmwheel_gym.envs.v1.robot import VelmwheelRobot
 
 
 logger = logging.getLogger(__name__)
 
 
-class VelmwheelEnvV3(gym.Env):
+class VelmwheelEnvV1(gym.Env):
     def __init__(self):
         super().__init__()
         # Initialize and configure ROS2 node
@@ -23,23 +22,26 @@ class VelmwheelEnvV3(gym.Env):
         self._node = rclpy.create_node(self.__class__.__name__)
         self._reset_service = self._node.create_client(Empty, "/reset_world")
 
-        self._robot = VelmwheelRobotV2()
-        self._reward = VelmwheelReward(self._robot)
+        self._robot = VelmwheelRobot()
 
         self.action_space = gym.spaces.Discrete(5)
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(2,), dtype=np.float64
         )
 
+        self.goal = [3, 3]
+        self.min_goal_dist = 1.0
+
     def step(self, action):
         self._robot.move(action)
         self._robot.update()
 
-        pos = self._robot.get_position()
-        x = [pos.x, pos.y]
-        obs = np.array(x)
-        reward = self._reward.calculate()
-        done = self._robot.is_collide() or self._reward.is_done()
+        obs = self._observe()
+
+        dist_to_goal = math.dist(self.goal, obs)
+
+        reward = self._calculate_reward(dist_to_goal)
+        done = self._robot.is_collide() or dist_to_goal < self.min_goal_dist
         info = {}
 
         return obs, reward, done, info
@@ -54,21 +56,26 @@ class VelmwheelEnvV3(gym.Env):
         self._robot.reset()
         self._robot.update()
 
-        pos = self._robot.get_position()
-        pos = [pos.x, pos.y]
-        dist_start = math.dist(pos, [0, 0])
-        logger.debug(f"{dist_start=}")
-
-        while dist_start > 1.0:
-            self._robot.update()
-            pos = self._robot.get_position()
-            pos = [pos.x, pos.y]
-            dist_start = math.dist(pos, [0, 0])
-            logger.debug(f"{dist_start=}")
-        return np.array(pos)
+        return self._observe()
 
     def close(self):
         logger.info("Closing " + self.__class__.__name__ + " environment.")
         self._move(0)
         self._node.destroy_node()
         rclpy.shutdown()
+
+    def _observe(self) -> np.array:
+        position_as_point = self._robot.get_position()
+        position_as_list = [position_as_point.x, position_as_point.y]
+        return np.array(position_as_list)
+
+    def _calculate_reward(self, dist_to_goal: float) -> float:
+        if self._robot.is_collide():
+            logger.debug("Collision!")
+            return -100.0
+
+        if dist_to_goal < self.min_goal_dist:
+            logger.debug("Goal achieved!")
+            return 200.0
+
+        return -0.001

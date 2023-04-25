@@ -4,12 +4,12 @@ import gym
 from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from velmwheel_gym.envs.velmwheel import VelmwheelEnv
+from velmwheel_gym.envs.v1.env import VelmwheelEnvV1
 from velmwheel_gym.logger import init_logging
 
 
 def get_model_path() -> str:
-    model_base_path = "./models/velmwheel_v2/dqn"
+    model_base_path = "./models/velmwheel_v1/dqn"
     run_id = 1
     for path in os.listdir(model_base_path):
         if run_id == int(path):
@@ -21,9 +21,7 @@ def get_model_path() -> str:
 init_logging()
 
 
-# env = gym.make("Velmwheel-v0")
-# env = gym.make("Velmwheel-v2")
-env = gym.make("Velmwheel-v2")
+env = gym.make("Velmwheel50-v1")
 
 
 model = DQN(

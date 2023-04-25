@@ -12,11 +12,10 @@ init_logging()
 
 
 # env = gym.make("Velmwheel-v0")
-env = gym.make("Velmwheel-v2")
+env = gym.make("Velmwheel50-v2")
 
 
-# model = DQN.load("./models/velmwheel_v2/dqn_20000_steps")
-model = DQN.load("./models/velmwheel_v2/dqn/3/dqn_90000_steps")
+model = DQN.load("./models/velmwheel_v1/dqn/3/dqn_90000_steps")
 
 obs = env.reset()
 

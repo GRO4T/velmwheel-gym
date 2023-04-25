@@ -15,7 +15,7 @@ init_logging()
 # env = gym.make("Velmwheel-v2")
 env = gym.make("Velmwheel-v4")
 
-MODEL_DIRECTORY = "./models/velmwheel_v2/dqn/2"
+MODEL_DIRECTORY = "./models/velmwheel_v1/dqn/2"
 MODEL_FILENAME = "dqn_20000_steps"
 MODEL_REPLAY_BUFFER_FILENAME = "dqn_replay_buffer_20000_steps"
 
