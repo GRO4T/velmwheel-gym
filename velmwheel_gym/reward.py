@@ -22,11 +22,11 @@ class VelmwheelReward:
 
         self._dist = math.dist(robot_position, target)
 
-        if self._dist < 1.0:
+        if self._dist < 0.1:
             logger.debug("Success!")
             return 200.0
 
         return -0.001
 
     def is_done(self) -> bool:
-        return self._robot.is_collide() or self._dist < 1.0
+        return self._robot.is_collide() or self._dist < 0.1

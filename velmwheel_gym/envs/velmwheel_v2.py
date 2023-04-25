@@ -1,3 +1,4 @@
+""" Observation is robot position """
 import logging
 
 import numpy as np
@@ -35,7 +36,7 @@ class VelmwheelEnvV2(gym.Env):
 
         pos = self._robot.get_position()
         x = [pos.x, pos.y]
-        obs = x
+        obs = np.array(x)
         reward = self._reward.calculate()
         done = self._robot.is_collide() or self._reward.is_done()
         info = {}
@@ -54,7 +55,7 @@ class VelmwheelEnvV2(gym.Env):
 
         pos = self._robot.get_position()
         x = [pos.x, pos.y]
-        return x
+        return np.array(x)
 
     def close(self):
         logger.info("Closing " + self.__class__.__name__ + " environment.")

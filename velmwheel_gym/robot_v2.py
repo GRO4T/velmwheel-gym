@@ -1,4 +1,5 @@
 import time
+import math
 import logging
 import rclpy
 from sensor_msgs.msg import PointCloud2
@@ -19,7 +20,7 @@ ACTION_TO_DIRECTION = {
 }
 
 
-class VelmwheelRobot:
+class VelmwheelRobotV2:
     def __init__(self):
         # Initialize and configure ROS2 node
         self._node = rclpy.create_node(self.__class__.__name__)
@@ -74,8 +75,30 @@ class VelmwheelRobot:
         motion_cmd.linear.x = direction[0]
         motion_cmd.linear.y = direction[1]
 
+        rclpy.spin_once(self._node)
+        curr_pos = self.get_position()
+        while curr_pos is None:
+            rclpy.spin_once(self._node)
+            curr_pos = self.get_position()
+            logger.debug(curr_pos)
+        curr_pos = [curr_pos.x, curr_pos.y]
+
+        target_pos = [curr_pos[0] + direction[0], curr_pos[1] + direction[1]]
+        logger.debug(f"{target_pos=}")
+
         self._movement_pub.publish(motion_cmd)
-        time.sleep(0.16 / 6)
+
+        dist = math.dist(curr_pos, target_pos)
+        logger.debug(f"{dist=}")
+        while dist > 0.5:
+            logger.debug(f"{dist=}")
+            curr_pos = self.get_position()
+            rclpy.spin_once(self._node)
+            curr_pos = [curr_pos.x, curr_pos.y]
+            dist = math.dist(curr_pos, target_pos)
+
+        stop_cmd = Twist()
+        self._movement_pub.publish(stop_cmd)
 
     def get_lidar_data(self) -> any:
         return self._lidar_data

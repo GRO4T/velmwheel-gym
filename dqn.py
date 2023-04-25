@@ -1,17 +1,28 @@
+import os
+
 import gym
 from stable_baselines3 import DQN
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.logger import HParam
+from stable_baselines3.common.callbacks import CheckpointCallback
 
 from velmwheel_gym.envs.velmwheel import VelmwheelEnv
 from velmwheel_gym.logger import init_logging
+
+
+def get_model_path() -> str:
+    model_base_path = "./models/velmwheel_v2/dqn"
+    run_id = 1
+    for path in os.listdir(model_base_path):
+        if run_id == int(path):
+            run_id += 1
+
+    return os.path.join(model_base_path, str(run_id))
 
 
 init_logging()
 
 
 # env = gym.make("Velmwheel-v0")
+# env = gym.make("Velmwheel-v2")
 env = gym.make("Velmwheel-v2")
 
 
@@ -26,6 +37,13 @@ model = DQN(
     learning_rate=0.001,
 )
 
-print(model.policy)
+# Save a checkpoint every 1000 steps
+checkpoint_callback = CheckpointCallback(
+    save_freq=10000,
+    save_path=get_model_path(),
+    name_prefix="dqn",
+    save_replay_buffer=True,
+    save_vecnormalize=True,
+)
 
-model.learn(total_timesteps=100000, progress_bar=True)
+model.learn(total_timesteps=40000, progress_bar=True, callback=checkpoint_callback)
