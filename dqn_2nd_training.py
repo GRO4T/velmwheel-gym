@@ -4,16 +4,14 @@ import gym
 from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from velmwheel_gym.envs.velmwheel import VelmwheelEnv
+from velmwheel_gym.envs.v1.env import VelmwheelEnv
 from velmwheel_gym.logger import init_logging
 
 
 init_logging()
 
 
-# env = gym.make("Velmwheel-v0")
-# env = gym.make("Velmwheel-v2")
-env = gym.make("Velmwheel-v4")
+env = gym.make("Velmwheel500-v1")
 
 MODEL_DIRECTORY = "./models/velmwheel_v1/dqn/2"
 MODEL_FILENAME = "dqn_20000_steps"

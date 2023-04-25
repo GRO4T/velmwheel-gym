@@ -5,8 +5,8 @@ import rclpy
 from geometry_msgs.msg import Twist, PoseStamped
 from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
 
-from velmwheel_gym.constants import ACTION_TO_DIRECTION
 from velmwheel_gazebo_msgs.msg import ContactState
+from velmwheel_gym.constants import ACTION_TO_DIRECTION
 
 
 logger = logging.getLogger(__name__)

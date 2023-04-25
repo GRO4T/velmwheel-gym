@@ -4,7 +4,7 @@ import gym
 from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from velmwheel_gym.envs.v1.env import VelmwheelEnvV1
+from velmwheel_gym.envs.v1.env import VelmwheelEnv
 from velmwheel_gym.logger import init_logging
 
 
