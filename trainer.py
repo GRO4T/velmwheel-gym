@@ -32,21 +32,30 @@ parser.add_argument("--min_goal_dist", type=float, help="Minimum distance to goa
 args = parser.parse_args()
 
 # ---------------------------------------------------------------------------- #
-#                              Training the model                              #
+#                               Helper functions                               #
 # ---------------------------------------------------------------------------- #
 
-# Get model path
-model_save_dir = "./models/velmwheel_v1/dqn"
-run_id = 1
-for path in os.listdir(model_save_dir):
-    run_id += 1
 
-model_save_path = os.path.join(model_save_dir, str(run_id))
+def get_model_save_path(model_path: str, replay_buffer_path: str) -> str:
+    if model_path and replay_buffer_path:
+        return os.path.dirname(model_path)
+
+    model_save_dir = "./models/velmwheel_v1/dqn"
+    run_id = 1
+    for _ in os.listdir(model_save_dir):
+        run_id += 1
+
+    return os.path.join(model_save_dir, str(run_id))
+
+
+# ---------------------------------------------------------------------------- #
+#                              Training the model                              #
+# ---------------------------------------------------------------------------- #
 
 # Define model saving callback
 checkpoint_callback = CheckpointCallback(
     save_freq=10000,
-    save_path=model_save_path,
+    save_path=get_model_save_path(args.model, args.replay_buffer),
     name_prefix="dqn",
     save_replay_buffer=True,
     save_vecnormalize=True,
