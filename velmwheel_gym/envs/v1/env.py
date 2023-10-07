@@ -48,6 +48,7 @@ class VelmwheelEnv(gym.Env):
 
     def reset(self):
         while not self._reset_service.wait_for_service(timeout_sec=1.0):
+            print("Waiting for Velmwheel's Gazebo sim...")
             logger.info("/reset_world service not available, waiting again...")
 
         reset_future = self._reset_service.call_async(Empty.Request())
