@@ -1,5 +1,6 @@
 import math
 import argparse
+import configparser
 
 import gym
 from stable_baselines3 import DQN
@@ -20,7 +21,7 @@ parser = argparse.ArgumentParser(
     description="Script for testing reinforcement learning models for WUT Velmwheel robot",
 )
 parser.add_argument(
-    "--gym_env", type=str, help="Name of the Gym environment", required=True
+    "--gym_env", type=str, help="Name of the Gym environment", required=False
 )
 parser.add_argument("--model", type=str, help="Model to load path", required=False)
 parser.add_argument(
@@ -30,13 +31,39 @@ parser.add_argument(
 args = parser.parse_args()
 
 # ---------------------------------------------------------------------------- #
+#                             Reading configuration                            #
+# ---------------------------------------------------------------------------- #
+
+config = configparser.ConfigParser()
+config.read(["config.ini"])
+
+# ---------------------------------------------------------------------------- #
+#                             Evaluating parameters                            #
+# ---------------------------------------------------------------------------- #
+class ParameterReader:
+    def __init__(self, args: argparse.Namespace, config: configparser.ConfigParser):
+        self._args = args
+        self._config = config
+
+    def read(self, name: str):
+        value = self._config.get("tester", name) if self._config else self._args[name]
+        print(f"{name}={value}")
+        return value
+
+param_reader = ParameterReader(args, config)
+
+gym_env = param_reader.read("gym_env")
+model_path = param_reader.read("model")
+replay_buffer_path = param_reader.read("replay_buffer")
+
+# ---------------------------------------------------------------------------- #
 #                               Testing the model                              #
 # ---------------------------------------------------------------------------- #
 
-env = gym.make(args.gym_env)
+env = gym.make(gym_env)
 
-model = DQN.load(args.model)
-model.load_replay_buffer(args.replay_buffer)
+model = DQN.load(model_path)
+model.load_replay_buffer(replay_buffer_path)
 model.set_env(env)
 
 obs = env.reset()

@@ -1,5 +1,6 @@
 import os
 import argparse
+import configparser
 
 import gym
 from stable_baselines3 import DQN
@@ -19,17 +20,45 @@ parser = argparse.ArgumentParser(
     description="Script for training reinforcement learning models for WUT Velmwheel robot",
 )
 parser.add_argument(
-    "--gym_env", type=str, help="Name of the Gym environment", required=True
+    "--gym_env", type=str, help="Name of the Gym environment", required=False
 )
 parser.add_argument("--model", type=str, help="Model to load path", required=False)
 parser.add_argument(
     "--replay_buffer", type=str, help="Replay buffer to load", required=False
 )
-parser.add_argument("--timesteps", type=int, help="Number of timesteps", required=True)
+parser.add_argument("--timesteps", type=int, help="Number of timesteps", required=False)
 
 parser.add_argument("--min_goal_dist", type=float, help="Minimum distance to goal")
 
 args = parser.parse_args()
+
+# ---------------------------------------------------------------------------- #
+#                             Reading configuration                            #
+# ---------------------------------------------------------------------------- #
+
+config = configparser.ConfigParser()
+config.read(["config.ini"])
+
+# ---------------------------------------------------------------------------- #
+#                             Evaluating parameters                            #
+# ---------------------------------------------------------------------------- #
+class ParameterReader:
+    def __init__(self, args: argparse.Namespace, config: configparser.ConfigParser):
+        self._args = args
+        self._config = config
+
+    def read(self, name: str):
+        value = self._config.get("trainer", name) if self._config else self._args[name]
+        print(f"{name}={value}")
+        return value
+
+param_reader = ParameterReader(args, config)
+
+gym_env = param_reader.read("gym_env")
+model_path = param_reader.read("model")
+replay_buffer_path = param_reader.read("replay_buffer")
+timesteps = int(param_reader.read("timesteps"))
+min_goal_dist = float(param_reader.read("min_goal_dist"))
 
 # ---------------------------------------------------------------------------- #
 #                               Helper functions                               #
@@ -55,7 +84,7 @@ def get_model_save_path(model_path: str, replay_buffer_path: str) -> str:
 # Define model saving callback
 checkpoint_callback = CheckpointCallback(
     save_freq=10000,
-    save_path=get_model_save_path(args.model, args.replay_buffer),
+    save_path=get_model_save_path(model_path, replay_buffer_path),
     name_prefix="dqn",
     save_replay_buffer=True,
     save_vecnormalize=True,
@@ -63,12 +92,12 @@ checkpoint_callback = CheckpointCallback(
 
 # Create/Load the model
 model = None
-env = gym.make(args.gym_env)
-env.env.min_goal_dist = args.min_goal_dist
+env = gym.make(gym_env)
+env.env.min_goal_dist = min_goal_dist 
 
-if args.model:
-    model = DQN.load(args.model)
-    model.load_replay_buffer(args.replay_buffer)
+if model_path:
+    model = DQN.load(model_path)
+    model.load_replay_buffer(replay_buffer_path)
     model.set_env(env)
 else:
     model = DQN(
@@ -83,7 +112,7 @@ else:
 
 # Train the model
 model.learn(
-    total_timesteps=args.timesteps,
+    total_timesteps=timesteps,
     progress_bar=True,
     callback=checkpoint_callback,
     reset_num_timesteps=False,
