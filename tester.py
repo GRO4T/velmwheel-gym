@@ -1,14 +1,13 @@
-import math
 import argparse
 import configparser
+import math
 
 import gym
 from stable_baselines3 import DQN
 
 from velmwheel_gym.constants import ACTION_TO_DIRECTION
+from velmwheel_gym.env import VelmwheelEnv
 from velmwheel_gym.logger import init_logging
-from velmwheel_gym.envs.v1.env import VelmwheelEnv
-
 
 init_logging()
 
@@ -37,6 +36,7 @@ args = parser.parse_args()
 config = configparser.ConfigParser()
 config.read(["config.ini"])
 
+
 # ---------------------------------------------------------------------------- #
 #                             Evaluating parameters                            #
 # ---------------------------------------------------------------------------- #
@@ -49,6 +49,7 @@ class ParameterReader:
         value = self._config.get("tester", name) if self._config else self._args[name]
         print(f"{name}={value}")
         return value
+
 
 param_reader = ParameterReader(args, config)
 

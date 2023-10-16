@@ -1,12 +1,12 @@
-import os
 import argparse
 import configparser
+import os
 
 import gym
 from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from velmwheel_gym.envs.v1.env import VelmwheelEnv
+from velmwheel_gym.env import VelmwheelEnv
 from velmwheel_gym.logger import init_logging
 
 init_logging()
@@ -39,6 +39,7 @@ args = parser.parse_args()
 config = configparser.ConfigParser()
 config.read(["config.ini"])
 
+
 # ---------------------------------------------------------------------------- #
 #                             Evaluating parameters                            #
 # ---------------------------------------------------------------------------- #
@@ -51,6 +52,7 @@ class ParameterReader:
         value = self._config.get("trainer", name) if self._config else self._args[name]
         print(f"{name}={value}")
         return value
+
 
 param_reader = ParameterReader(args, config)
 
@@ -93,7 +95,7 @@ checkpoint_callback = CheckpointCallback(
 # Create/Load the model
 model = None
 env = gym.make(gym_env)
-env.env.min_goal_dist = min_goal_dist 
+env.env.min_goal_dist = min_goal_dist
 
 if model_path:
     model = DQN.load(model_path)

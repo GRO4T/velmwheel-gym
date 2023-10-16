@@ -22,3 +22,4 @@ repos:
       - id: pylint
         additional_dependencies:
           - . # <-- that makes it install current project
+        args: ["--disable=C0114,C0115,C0116"]
