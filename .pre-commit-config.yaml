@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        exclude: "^.*migrations.*$"
+
+  - repo: https://github.com/psf/black
+    rev: 23.9.1
+    hooks:
+      - id: black
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.0.259
+    hooks:
+      - id: ruff
+        exclude: "^.*migrations.*$"
+
+  - repo: https://github.com/PyCQA/pylint
+    rev: 84b06bb89750b5b557057508fcc294d8af7a469b
+    hooks:
+      - id: pylint
+        additional_dependencies:
+          - . # <-- that makes it install current project
