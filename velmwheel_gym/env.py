@@ -8,7 +8,7 @@ import gym
 import numpy as np
 import rclpy
 from std_srvs.srv import Empty
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 
 from velmwheel_gym.constants import DEFAULT_QOS_PROFILE
 from velmwheel_gym.robot import VelmwheelRobot
@@ -27,7 +27,9 @@ class VelmwheelEnv(gym.Env):
         self._reset_service = self._node.create_client(Empty, "/reset_world")
 
         self._goal_marker_pub = self._node.create_publisher(
-            Marker, "/visualization_marker", qos_profile=DEFAULT_QOS_PROFILE
+            MarkerArray,
+            "/velmwheel/markers_map/visualization",
+            qos_profile=DEFAULT_QOS_PROFILE,
         )
 
         self._robot = VelmwheelRobot()
@@ -110,6 +112,7 @@ class VelmwheelEnv(gym.Env):
         logger.info(f"{self._goal=}")
 
     def _publish_goal_marker(self):
+        ma = MarkerArray()
         m = Marker()
 
         m.header.frame_id = "world"
@@ -132,4 +135,6 @@ class VelmwheelEnv(gym.Env):
         m.color.b = 0.0
         m.color.a = 1.0
 
-        self._goal_marker_pub.publish(m)
+        ma.markers = [m]
+
+        self._goal_marker_pub.publish(ma)
