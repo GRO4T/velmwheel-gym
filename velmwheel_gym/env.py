@@ -40,16 +40,25 @@ class VelmwheelEnv(gym.Env):
         )
 
         self._goal: Point = None
-        self._min_goal_dist: float = None
+        self._min_goal_dist: float = 0
+
+    @property
+    def goal(self) -> Point:
+        """Robot's navigation goal."""
+        return self._goal
+
+    @goal.setter
+    def goal(self, point: Point):
+        self._goal = point
 
     @property
     def min_goal_dist(self) -> float:
+        """Minimum distance to goal to reach it"""
         return self._min_goal_dist
 
     @min_goal_dist.setter
-    def min_goal_dist(self, value):
-        """Minimum distance to goal to reach it"""
-        self._min_goal_dist = value
+    def min_goal_dist(self, dist: float):
+        self._min_goal_dist = dist
 
     def step(self, action):
         self._robot.move(action)
@@ -97,17 +106,15 @@ class VelmwheelEnv(gym.Env):
 
     def _calculate_reward(self, dist_to_goal: float) -> float:
         if self._robot.is_collide:
-            logger.debug("Collision!")
-            return -100.0
+            return -1.0
 
         if dist_to_goal < self._min_goal_dist:
-            logger.debug("Goal achieved!")
-            return 200.0
+            return 1.0
 
-        return -0.001
+        return 0.0
 
     def _set_new_goal(self):
-        r = 5.0
+        r = 3.0
         self._goal = Point(x=random.uniform(-r, r), y=random.uniform(-r, r))
         logger.info(f"{self._goal=}")
 

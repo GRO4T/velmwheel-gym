@@ -8,6 +8,7 @@ from stable_baselines3 import DQN
 from velmwheel_gym.constants import ACTION_TO_DIRECTION
 from velmwheel_gym.env import VelmwheelEnv
 from velmwheel_gym.logger import init_logging
+from velmwheel_gym.types import Point
 
 init_logging()
 
@@ -72,6 +73,8 @@ obs = env.reset()
 goal = [3, 3]
 min_dist_to_goal = math.inf
 
+env.env.goal = Point(*goal)
+
 while True:
     action, _states = model.predict(obs, deterministic=True)
 
@@ -80,7 +83,8 @@ while True:
     print("----------------------------------------------")
     print(f"direction={ACTION_TO_DIRECTION[int(action)]}")
     print(f"{obs=}")
-    dist_to_goal = math.dist(goal, obs)
+    pos_x, pos_y, *_ = obs
+    dist_to_goal = math.dist(goal, (pos_x, pos_y))
     print(f"{dist_to_goal=}")
     print(f"{min_dist_to_goal=}")
     print("----------------------------------------------")
