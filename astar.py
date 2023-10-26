@@ -29,55 +29,41 @@ class Color(Enum):
 
 
 Point = namedtuple("Point", "x y")
+Point.__doc__ = "A point in 2D space."
 
-"""
-Meters per pixel.
-"""
-RESOLUTION = 0.05
-
-"""
-The 2-D pose of the lower-left pixel in the map, as (x, y, yaw),
-with yaw as counterclockwise rotation (yaw=0 means no rotation).
-Many parts of the system currently ignore yaw.
-"""
-ORIGIN = Point(-9.6, -10.5)
+Map2D_ = namedtuple("Map", "data width height origin resolution")
 
 
-filename = "test_map_preprocessed.pgm"
+class Map2D(Map2D_):
+    """
+    A map represented as a 2D array of pixels.
 
-img = cv2.imread(filename)
-IMG_WIDTH, IMG_HEIGHT, _ = img.shape
+    Attributes:
+        data: Array of pixels.
+        width: Array's width.
+        height: Array's height.
+        origin: The 2-D pose of the lower-left pixel in the map, as (x, y, yaw),
+                with yaw as counterclockwise rotation (yaw=0 means no rotation).
+                Many parts of the system currently ignore yaw.
+        resolution: Meters per pixel.
+    """
+
+    def coords_to_pixels(self, x: float, y: float) -> Point:
+        """Converts given coordinates to pixels on the image."""
+        assert x >= self.origin.x and y >= self.origin.y
+        x_pixels = int(abs(self.origin.x - x) / self.resolution)
+        y_pixels = int(abs(self.origin.y - y) / self.resolution)
+        return Point(x_pixels, self.height - y_pixels)
 
 
-def coords_to_pixels(x, y) -> Point:
-    assert x >= ORIGIN.x and y >= ORIGIN.y
-    x_pixels = int(abs(ORIGIN.x - x) / RESOLUTION)
-    y_pixels = int(abs(ORIGIN.y - y) / RESOLUTION)
-    return Point(x_pixels, IMG_HEIGHT - y_pixels)
+def draw_point(img, center, color):
+    img = cv2.circle(img=img, center=center, radius=5, color=color.value, thickness=-1)
 
 
 def manhattan_heuristic(start: Point, dest: Point) -> float:
     return abs(start.x - dest.x) + abs(start.y - dest.y)
 
 
-# draw goal
-coords = coords_to_pixels(3, 3)
-color = Color.BLUE.value
-radius = 5
-thickness = -1
-
-img = cv2.circle(img, coords, radius, color, thickness)
-
-# draw initial position
-coords = coords_to_pixels(0, 0)
-color = Color.RED.value
-radius = 5
-thickness = -1
-
-img = cv2.circle(img, coords, radius, color, thickness)
-
-
-# display final image
 class Node:
     def __init__(self, parent=None, position: Point = None):
         self.parent = parent
@@ -91,36 +77,35 @@ class Node:
         return self.position == other.position
 
 
-start_node = Node(None, coords_to_pixels(0, 0))
-end_node = Node(None, coords_to_pixels(3, 3))
-
-open_list = []
-closed_list = []
-
-path = []
-
-open_list.append(start_node)
-
-while len(open_list) > 0:
-    current_node = open_list[0]
+def find_best_open_node(open_list: list, current_node: Node) -> tuple:
     current_index = 0
-
     for index, item in enumerate(open_list):
         if item.f < current_node.f:
             current_node = item
             current_index = index
+    return current_node, current_index
 
-    open_list.pop(current_index)
-    closed_list.append(current_node)
 
-    if current_node == end_node:
-        current = current_node
-        while current is not None:
-            path.append(current.position)
-            current = current.parent
-        break
+def reconstruct_path(current_node: Node) -> list:
+    path = []
+    current = current_node
+    while current is not None:
+        path.append(current.position)
+        current = current.parent
+    return path
 
-    # Generate children
+
+def generate_children(map_2d: Map2D, current_node: Node) -> list:
+    """
+    Find adjacent nodes that are within map dimensions and are on walkable terrain.
+
+    Args:
+        map_2d:         Map represented by a 2D pixel array.
+        current_node:   Currently processed node.
+
+    Returns:
+        List of adjacent nodes meeting the requirements.
+    """
     children = []
     for delta in [
         (0, -1),
@@ -131,8 +116,7 @@ while len(open_list) > 0:
         (-1, 1),
         (1, -1),
         (1, 1),
-    ]:  # Adjacent squares
-        # Get node position
+    ]:
         dx, dy = delta
         node_position = Point(
             current_node.position.x + dx,
@@ -141,24 +125,43 @@ while len(open_list) > 0:
 
         # Make sure within range
         if (
-            node_position.x > (IMG_WIDTH - 1)
+            node_position.x > (map_2d.width - 1)
             or node_position.x < 0
-            or node_position.y > (IMG_HEIGHT - 1)
+            or node_position.y > (map_2d.height - 1)
             or node_position.y < 0
         ):
             continue
 
         # Make sure walkable terrain
-        color = img[node_position.x][node_position.y]
+        color = map_2d.data[node_position.y][node_position.x]
         if color == Color.BLACK:
             continue
 
-        # Create new node
         new_node = Node(current_node, node_position)
-
-        # Append
         children.append(new_node)
 
+    return children
+
+
+def relax(
+    open_list: list,
+    closed_list: list,
+    children: list,
+    current_node: Node,
+    end_node: Node,
+):
+    """
+    Performs relaxation step of the A* algorithm.
+
+    Side Effect: open_list is modified in-place.
+
+    Args:
+        open_list:      List of open nodes.
+        closed_list:    List of closed nodes.
+        children:       List of nodes adjacent to current.
+        current_node:   Current node.
+        end_node:       End node.
+    """
     for child in children:
         for closed_child in closed_list:
             if child == closed_child:
@@ -170,20 +173,89 @@ while len(open_list) > 0:
         )
         child.f = child.g + child.h
 
-        # Child is already in the open list
         for open_node in open_list:
             if child == open_node and child.g > open_node.g:
                 continue
 
-        # Add the child to the open list
         open_list.append(child)
 
-# draw path
-for position in path:
-    x, y = position
-    img[y][x] = np.array(Color.GREEN.value)
+    return open_list
 
-cv2.imshow("A*", img)
 
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+def astar(map_2d: Map2D, start: Point, end: Point) -> list:
+    """
+    Given a 2D map, finds the shortest path to goal using A* algorithm.
+
+    Args:
+        map_2d:         Map represented by a 2D pixel array.
+        start:          Starting point coordinates.
+        end:            Goal coordinates.
+
+    Returns:
+        Sequence of points that construct the shortest path to goal.
+    """
+    start_node = Node(None, map_2d.coords_to_pixels(start.x, start.y))
+    end_node = Node(None, map_2d.coords_to_pixels(end.x, end.y))
+
+    open_list = []
+    closed_list = []
+    path = []
+
+    open_list.append(start_node)
+
+    while len(open_list) > 0:
+        current_node, current_index = find_best_open_node(
+            open_list, current_node=open_list[0]
+        )
+
+        open_list.pop(current_index)
+        closed_list.append(current_node)
+
+        if current_node == end_node:
+            path = reconstruct_path(current_node)
+            break
+
+        children = generate_children(map_2d, current_node)
+        relax(open_list, closed_list, children, current_node, end_node)
+
+    return path
+
+
+def main():
+    # Read the image
+    filename = "test_map_preprocessed.pgm"
+    img = cv2.imread(filename)
+    img_width, img_height, _ = img.shape
+
+    map_2d = Map2D(
+        data=img,
+        width=img_width,
+        height=img_height,
+        origin=Point(-9.6, -10.5),
+        resolution=0.05,
+    )
+
+    # Draw goal
+    draw_point(img, map_2d.coords_to_pixels(3, 3), Color.BLUE)
+
+    # Draw initial position
+    draw_point(img, map_2d.coords_to_pixels(0, 0), Color.RED)
+
+    # Find the shortest path
+    path = astar(map_2d, Point(0, 0), Point(3, 3))
+
+    # Draw path
+    for position in path:
+        x, y = position
+        img[y][x] = np.array(Color.GREEN.value)
+
+    # Display the final image
+    cv2.imshow("A*", img)
+
+    # Wait for user input then close the window
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
