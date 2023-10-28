@@ -143,10 +143,30 @@ def generate_children(map_2d: Map2D, current_node: Node) -> list:
     return children
 
 
+def relax_child(
+    child: Node, open_list: list, closed_list: list, current_node: Node, end_node: Node
+):
+    for closed_child in closed_list:
+        if child == closed_child:
+            return
+
+    child.g = current_node.g + 1
+    child.h = ((child.position[0] - end_node.position[0]) ** 2) + (
+        (child.position[1] - end_node.position[1]) ** 2
+    )
+    child.f = child.g + child.h
+
+    for open_node in open_list:
+        if child == open_node and child.g > open_node.g:
+            return
+
+    open_list.append(child)
+
+
 def relax(
+    children: list,
     open_list: list,
     closed_list: list,
-    children: list,
     current_node: Node,
     end_node: Node,
 ):
@@ -156,30 +176,14 @@ def relax(
     Side Effect: open_list is modified in-place.
 
     Args:
+        children:       List of nodes adjacent to current.
         open_list:      List of open nodes.
         closed_list:    List of closed nodes.
-        children:       List of nodes adjacent to current.
         current_node:   Current node.
         end_node:       End node.
     """
     for child in children:
-        for closed_child in closed_list:
-            if child == closed_child:
-                continue
-
-        child.g = current_node.g + 1
-        child.h = ((child.position[0] - end_node.position[0]) ** 2) + (
-            (child.position[1] - end_node.position[1]) ** 2
-        )
-        child.f = child.g + child.h
-
-        for open_node in open_list:
-            if child == open_node and child.g > open_node.g:
-                continue
-
-        open_list.append(child)
-
-    return open_list
+        relax_child(child, open_list, closed_list, current_node, end_node)
 
 
 def astar(map_2d: Map2D, start: Point, end: Point) -> list:
@@ -212,37 +216,45 @@ def astar(map_2d: Map2D, start: Point, end: Point) -> list:
         closed_list.append(current_node)
 
         if current_node == end_node:
-            path = reconstruct_path(current_node)
-            break
+            return reconstruct_path(current_node)
 
         children = generate_children(map_2d, current_node)
-        relax(open_list, closed_list, children, current_node, end_node)
+        relax(children, open_list, closed_list, current_node, end_node)
 
-    return path
+    return []
 
 
 def main():
+    # Configuration
+    map_filename = "test_map_preprocessed.pgm"
+    origin = Point(-9.6, -10.5)
+    resolution = 0.05
+    start = Point(0, 0)
+    goal = Point(7, 3)
+
     # Read the image
-    filename = "test_map_preprocessed.pgm"
-    img = cv2.imread(filename)
+    img = cv2.imread(map_filename)
     img_width, img_height, _ = img.shape
 
     map_2d = Map2D(
         data=img,
         width=img_width,
         height=img_height,
-        origin=Point(-9.6, -10.5),
-        resolution=0.05,
+        origin=origin,
+        resolution=resolution,
     )
 
+    # Draw starting position
+    draw_point(img, map_2d.coords_to_pixels(*start), Color.RED)
+
     # Draw goal
-    draw_point(img, map_2d.coords_to_pixels(3, 3), Color.BLUE)
+    draw_point(img, map_2d.coords_to_pixels(*goal), Color.BLUE)
 
-    # Draw initial position
-    draw_point(img, map_2d.coords_to_pixels(0, 0), Color.RED)
+    # Find the path to goal
+    path = astar(map_2d, start, goal)
 
-    # Find the shortest path
-    path = astar(map_2d, Point(0, 0), Point(3, 3))
+    if not path:
+        raise Exception("Path not found")
 
     # Draw path
     for position in path:
