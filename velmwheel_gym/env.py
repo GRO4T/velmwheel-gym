@@ -2,13 +2,12 @@
 import logging
 import math
 import random
-from collections import namedtuple
 
 import gym
 import numpy as np
 import rclpy
+from geometry_msgs.msg import PoseStamped
 from std_srvs.srv import Empty
-from visualization_msgs.msg import Marker, MarkerArray
 
 from velmwheel_gym.constants import DEFAULT_QOS_PROFILE
 from velmwheel_gym.robot import VelmwheelRobot
@@ -26,9 +25,9 @@ class VelmwheelEnv(gym.Env):
 
         self._reset_service = self._node.create_client(Empty, "/reset_world")
 
-        self._goal_marker_pub = self._node.create_publisher(
-            MarkerArray,
-            "/velmwheel/markers_map/visualization",
+        self._goal_pub = self._node.create_publisher(
+            PoseStamped,
+            "/goal_pose",
             qos_profile=DEFAULT_QOS_PROFILE,
         )
 
@@ -86,7 +85,7 @@ class VelmwheelEnv(gym.Env):
         self._robot.update()
 
         self._set_new_goal()
-        self._publish_goal_marker()
+        self._publish_new_goal()
 
         return self._observe()
 
@@ -115,33 +114,12 @@ class VelmwheelEnv(gym.Env):
 
     def _set_new_goal(self):
         r = 3.0
-        self._goal = Point(x=random.uniform(-r, r), y=random.uniform(-r, r))
-        logger.info(f"{self._goal=}")
+        self.goal = Point(x=random.uniform(-r, r), y=random.uniform(-r, r))
+        logger.info(f"{self.goal=}")
 
-    def _publish_goal_marker(self):
-        ma = MarkerArray()
-        m = Marker()
-
-        m.header.frame_id = "world"
-        m.ns = "velmwheel"
-        m.id = 0
-        m.type = Marker.SPHERE
-        m.scale.x = 1.0
-        m.scale.y = 1.0
-        m.scale.z = 1.0
-        m.pose.position.x = self._goal.x
-        m.pose.position.y = self._goal.y
-        m.pose.position.z = 0.0
-        m.pose.orientation.x = 0.0
-        m.pose.orientation.y = 0.0
-        m.pose.orientation.z = 0.0
-        m.pose.orientation.w = 1.0
-        m.action = Marker.ADD
-        m.color.r = 0.0
-        m.color.g = 1.0
-        m.color.b = 0.0
-        m.color.a = 1.0
-
-        ma.markers = [m]
-
-        self._goal_marker_pub.publish(ma)
+    def _publish_new_goal(self):
+        goal = PoseStamped()
+        goal.header.frame_id = "map"
+        goal.pose.position.x = self.goal.x
+        goal.pose.position.y = self.goal.y
+        self._goal_pub.publish(goal)
