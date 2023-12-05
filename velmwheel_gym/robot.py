@@ -2,7 +2,7 @@ import logging
 import time
 
 import rclpy
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
 from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
 from velmwheel_gazebo_msgs.msg import ContactState
 
@@ -23,7 +23,13 @@ class VelmwheelRobot:
         self._movement_pub = self._node.create_publisher(
             Twist,
             "/velmwheel/base/velocity_setpoint",
-            qos_profile=10,
+            qos_profile=qos_profile_system_default,
+        )
+
+        self._nav_initial_position_pub = self._node.create_publisher(
+            PoseWithCovarianceStamped,
+            "/initialpose",
+            qos_profile=qos_profile_system_default,
         )
 
         self._collision_sub = self._node.create_subscription(
@@ -74,7 +80,7 @@ class VelmwheelRobot:
         self._movement_pub.publish(motion_cmd)
         time.sleep(0.16 / 6)
 
-    def _collision_callback(self, message):
+    def _collision_callback(self, _):
         self._is_collide = True
         # logger.debug(f"Received collision msg: {message}")
 
@@ -83,3 +89,11 @@ class VelmwheelRobot:
             logger.debug(f"Position after reset: {message.pose.position}")
         p = message.pose.position
         self._position = Point(x=p.x, y=p.y)
+        self._publish_nav_initial_pose()
+
+    def _publish_nav_initial_pose(self):
+        initial_pose = PoseWithCovarianceStamped()
+        initial_pose.header.frame_id = "map"
+        initial_pose.pose.pose.position.x = self._position.x
+        initial_pose.pose.pose.position.y = self._position.y
+        self._nav_initial_position_pub.publish(initial_pose)
