@@ -110,6 +110,7 @@ else:
         learning_starts=0,
         target_update_interval=1000,
         learning_rate=0.001,
+        device="cuda",
     )
 
 # Train the model
