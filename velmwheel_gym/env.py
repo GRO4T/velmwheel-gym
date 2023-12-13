@@ -16,30 +16,35 @@ from velmwheel_gym.types import Point
 logger = logging.getLogger(__name__)
 
 
+RESET_SIMULATION_TOPIC = "/reset_simulation"
+NAVIGATION_GOAL_TOPIC = "/goal_pose"
+
+
 class VelmwheelEnv(gym.Env):
     def __init__(self):
         super().__init__()
 
-        rclpy.init()
-        self._node = rclpy.create_node(self.__class__.__name__)
-
-        self._reset_service = self._node.create_client(Empty, "/reset_world")
-
-        self._goal_pub = self._node.create_publisher(
-            PoseStamped,
-            "/goal_pose",
-            qos_profile=DEFAULT_QOS_PROFILE,
-        )
-
-        self._robot = VelmwheelRobot()
-
+        # gym related stuff
         self.action_space = gym.spaces.Discrete(5)
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(4,), dtype=np.float64
         )
-
         self._goal: Point = None
         self._min_goal_dist: float = 0
+
+        # ROS related stuff
+        rclpy.init()
+        self._node = rclpy.create_node(self.__class__.__name__)
+        # services
+        self._reset_world_srv = self._node.create_client(Empty, RESET_SIMULATION_TOPIC)
+        # publishers
+        self._navigation_goal_pub = self._node.create_publisher(
+            PoseStamped,
+            NAVIGATION_GOAL_TOPIC,
+            qos_profile=DEFAULT_QOS_PROFILE,
+        )
+        # robot class
+        self._robot = VelmwheelRobot()
 
     @property
     def goal(self) -> Point:
@@ -74,11 +79,13 @@ class VelmwheelEnv(gym.Env):
         return obs, reward, done, info
 
     def reset(self):
-        while not self._reset_service.wait_for_service(timeout_sec=1.0):
-            print("Waiting for Velmwheel's Gazebo sim...")
-            logger.info("/reset_world service not available, waiting again...")
+        while not self._reset_world_srv.wait_for_service(timeout_sec=1.0):
+            print(f"Waiting for {RESET_SIMULATION_TOPIC} service...")
+            logger.info(
+                f"{RESET_SIMULATION_TOPIC} service not available, waiting again..."
+            )
 
-        reset_future = self._reset_service.call_async(Empty.Request())
+        reset_future = self._reset_world_srv.call_async(Empty.Request())
         rclpy.spin_until_future_complete(self._node, reset_future)
 
         self._robot.reset()
@@ -122,4 +129,4 @@ class VelmwheelEnv(gym.Env):
         goal.header.frame_id = "map"
         goal.pose.position.x = self.goal.x
         goal.pose.position.y = self.goal.y
-        self._goal_pub.publish(goal)
+        self._navigation_goal_pub.publish(goal)
