@@ -16,7 +16,7 @@ from velmwheel_gym.types import Point
 logger = logging.getLogger(__name__)
 
 
-RESET_SIMULATION_TOPIC = "/reset_simulation"
+RESET_SIMULATION_TOPIC = "/reset_world"
 NAVIGATION_GOAL_TOPIC = "/goal_pose"
 
 
