@@ -2,7 +2,7 @@ import logging
 import time
 
 import rclpy
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
+from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped, Twist
 from rclpy.qos import qos_profile_system_default
 from scan_tools_msgs.srv import SetPose
 from velmwheel_gazebo_msgs.msg import ContactState
@@ -18,6 +18,7 @@ ROBOT_POSE_SIMULATION_TOPIC = "/velmwheel/sim/pose"
 ROBOT_COLLISION_TOPIC = "/velmwheel/contacts"
 LASER_SCAN_MATCHER_SET_POSE_TOPIC = "/velmwheel/laser_scan_matcher/set_pose"
 NAVIGATION_INITIAL_POSE_TOPIC = "/initialpose"
+ENCODERS_SET_POSE_TOPIC = "/velmwheel/odom/encoders/set_pose"
 
 
 class VelmwheelRobot:
@@ -48,6 +49,11 @@ class VelmwheelRobot:
             self._position_callback,
             qos_profile=qos_profile_system_default,
         )
+        self._encoders_set_pose_pub = self._node.create_publisher(
+            Pose,
+            ENCODERS_SET_POSE_TOPIC,
+            qos_profile=qos_profile_system_default,
+        )
         # subscribers
         self._collision_sub = self._node.create_subscription(
             ContactState,
@@ -72,6 +78,7 @@ class VelmwheelRobot:
         self._is_collide = False
         self._position = None
         self._reset_laser_scan_matcher_pose()
+        self._reset_encoders_pose()
 
     def update(self):
         """Updates robot's state measurements."""
@@ -113,4 +120,18 @@ class VelmwheelRobot:
         req = self._laser_scan_matcher_set_pose_srv.request
         req.pose.header.frame_id = "odom"
         req.pose.header.stamp.sec = int(time.time())
+        req.pose.pose.position.x = 0.0
+        req.pose.pose.position.y = 0.0
+        req.pose.pose.position.z = 0.0
+        req.pose.pose.orientation.x = 0.0
+        req.pose.pose.orientation.y = 0.0
+        req.pose.pose.orientation.z = 0.0
+        req.pose.pose.orientation.w = 1.0
         call_service(self._laser_scan_matcher_set_pose_srv)
+
+    def _reset_encoders_pose(self):
+        pose = Pose()
+        pose.position.x = 0.0
+        pose.position.y = 0.0
+        pose.position.z = 0.0
+        self._encoders_set_pose_pub.publish(pose)
