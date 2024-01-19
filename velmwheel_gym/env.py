@@ -2,11 +2,14 @@
 import logging
 import math
 import random
+import time
 
 import gym
 import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Path
+from rclpy.qos import qos_profile_system_default
 from std_srvs.srv import Empty
 
 from velmwheel_gym.constants import DEFAULT_QOS_PROFILE
@@ -18,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 RESET_SIMULATION_TOPIC = "/reset_world"
 NAVIGATION_GOAL_TOPIC = "/goal_pose"
+GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 
 
 class VelmwheelEnv(gym.Env):
@@ -31,6 +35,7 @@ class VelmwheelEnv(gym.Env):
         )
         self._goal: Point = None
         self._min_goal_dist: float = 0
+        self._path = None
 
         # ROS related stuff
         rclpy.init()
@@ -42,6 +47,13 @@ class VelmwheelEnv(gym.Env):
             PoseStamped,
             NAVIGATION_GOAL_TOPIC,
             qos_profile=DEFAULT_QOS_PROFILE,
+        )
+        # subscribers
+        self._navigation_plan_sub = self._node.create_subscription(
+            Path,
+            GLOBAL_PLANNER_PATH_TOPIC,
+            self._global_planner_callback,
+            qos_profile=qos_profile_system_default,
         )
         # robot class
         self._robot = VelmwheelRobot()
@@ -64,7 +76,17 @@ class VelmwheelEnv(gym.Env):
     def min_goal_dist(self, dist: float):
         self._min_goal_dist = dist
 
+    @property
+    def path(self) -> list[Point]:
+        """Path calculated by global planner."""
+        return self._path
+
+    @path.setter
+    def path(self, path: list[Point]):
+        self._path = path
+
     def step(self, action):
+        rclpy.spin_once(self._node)
         self._robot.move(action)
         self._robot.update()
 
@@ -91,14 +113,20 @@ class VelmwheelEnv(gym.Env):
         self._robot.reset()
         self._robot.update()
 
+        self.path = None
+
         self._set_new_goal()
         self._publish_new_goal()
+
+        while not self.path:
+            rclpy.spin_once(self._node)
+            time.sleep(1)
 
         return self._observe()
 
     def close(self):
         logger.info("Closing " + self.__class__.__name__ + " environment.")
-        self._move(0)
+        self._robot.move(0)
         self._node.destroy_node()
         rclpy.shutdown()
 
@@ -130,3 +158,10 @@ class VelmwheelEnv(gym.Env):
         goal.pose.position.x = self.goal.x
         goal.pose.position.y = self.goal.y
         self._navigation_goal_pub.publish(goal)
+
+    def _global_planner_callback(self, message: Path):
+        if self.path:  # update path only at the start of the episode
+            return
+
+        self.path = [pose_stamped.pose.position for pose_stamped in message.poses]
+        logger.info(f"{self.path=}")
