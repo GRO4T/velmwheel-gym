@@ -1,6 +1,7 @@
 **/*venv*/**
 **.pyc
 **/.vscode
+**/.idea
 **/install
 **/build
 **/log
