@@ -140,16 +140,23 @@ class VelmwheelEnv(gym.Env):
 
     def _calculate_reward(self, dist_to_goal: float) -> float:
         if self._robot.is_collide:
+            logger.debug("[EpisodeDone::Failure] Robot collided with an obstacle")
             return -1.0
 
         if dist_to_goal < self._min_goal_dist:
+            logger.debug(f"[EpisodeDone::Success] Robot reached goal at {self._goal=}")
             return 1.0
 
         return 0.0
 
     def _set_new_goal(self):
-        r = 3.0
-        self.goal = Point(x=random.uniform(-r, r), y=random.uniform(-r, r))
+        available_goals = [
+            Point(3.0, 3.0),
+            Point(3.0, -3.0),
+            Point(-3.0, 3.0),
+            Point(-3.0, -3.0),
+        ]
+        self.goal = random.choice(available_goals)
         logger.info(f"{self.goal=}")
 
     def _publish_new_goal(self):
