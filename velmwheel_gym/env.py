@@ -1,8 +1,8 @@
 """ TODO(kolasdam): write docstring. """
+
 import logging
 import math
 import random
-import time
 
 import gym
 import numpy as np
@@ -58,6 +58,8 @@ class VelmwheelEnv(gym.Env):
         # robot class
         self._robot = VelmwheelRobot()
 
+        self._episode = 0  # TODO: use episode count from gym.Env
+
     @property
     def goal(self) -> Point:
         """Robot's navigation goal."""
@@ -86,30 +88,32 @@ class VelmwheelEnv(gym.Env):
         self._path = path
 
     def step(self, action):
-        rclpy.spin_once(self._node)
+        logger.debug("==== GRO4T (1) ====")
+        rclpy.spin_once(self._node, timeout_sec=1.0)
+        logger.debug("==== GRO4T (1) ====")
         self._robot.move(action)
+        logger.debug("==== GRO4T (1) ====")
         self._robot.update()
+        logger.debug("==== GRO4T (1) ====")
 
         obs = self._observe()
+        logger.debug("==== GRO4T (1) ====")
 
         dist_to_goal = self._calculate_distance_to_goal(obs)
+        logger.debug("==== GRO4T (1) ====")
 
+        logger.debug("==== GRO4T (1) ====")
         reward = self._calculate_reward(dist_to_goal)
+        logger.debug("==== GRO4T (1) ====")
         done = self._robot.is_collide or dist_to_goal < self._min_goal_dist
+        logger.debug("==== GRO4T (1) ====")
         info = {}
+        logger.debug("==== GRO4T (1) ====")
 
         return obs, reward, done, info
 
     def reset(self):
-        while not self._reset_world_srv.wait_for_service(timeout_sec=1.0):
-            print(f"Waiting for {RESET_SIMULATION_TOPIC} service...")
-            logger.info(
-                f"{RESET_SIMULATION_TOPIC} service not available, waiting again..."
-            )
-
-        reset_future = self._reset_world_srv.call_async(Empty.Request())
-        rclpy.spin_until_future_complete(self._node, reset_future)
-
+        self._reset_simulation()
         self._robot.reset()
         self._robot.update()
 
@@ -118,9 +122,7 @@ class VelmwheelEnv(gym.Env):
         self._set_new_goal()
         self._publish_new_goal()
 
-        while not self.path:
-            rclpy.spin_once(self._node)
-            time.sleep(1)
+        self._wait_for_new_path()
 
         return self._observe()
 
@@ -140,14 +142,24 @@ class VelmwheelEnv(gym.Env):
 
     def _calculate_reward(self, dist_to_goal: float) -> float:
         if self._robot.is_collide:
-            logger.debug("[EpisodeDone::Failure] Robot collided with an obstacle")
+            logger.debug("FAILURE: Robot collided with an obstacle")
             return -1.0
 
         if dist_to_goal < self._min_goal_dist:
-            logger.debug(f"[EpisodeDone::Success] Robot reached goal at {self._goal=}")
+            logger.debug(f"SUCCESS: Robot reached goal at {self._goal=}")
             return 1.0
 
         return 0.0
+
+    def _reset_simulation(self):
+        while not self._reset_world_srv.wait_for_service(timeout_sec=1.0):
+            print(f"Waiting for {RESET_SIMULATION_TOPIC} service...")
+            logger.info(
+                f"{RESET_SIMULATION_TOPIC} service not available, waiting again..."
+            )
+
+        reset_future = self._reset_world_srv.call_async(Empty.Request())
+        rclpy.spin_until_future_complete(self._node, reset_future)
 
     def _set_new_goal(self):
         available_goals = [
@@ -157,7 +169,7 @@ class VelmwheelEnv(gym.Env):
             Point(-3.0, -3.0),
         ]
         self.goal = random.choice(available_goals)
-        logger.info(f"{self.goal=}")
+        logger.debug(f"{self.goal=}")
 
     def _publish_new_goal(self):
         goal = PoseStamped()
@@ -166,9 +178,20 @@ class VelmwheelEnv(gym.Env):
         goal.pose.position.y = self.goal.y
         self._navigation_goal_pub.publish(goal)
 
+    def _wait_for_new_path(self):
+        i = 0
+        while not self.path:
+            print("Waiting for global planner to calculate a new path")
+            logger.info("Waiting for global planner to calculate a new path")
+            rclpy.spin_once(self._node, timeout_sec=1.0)
+            i += 1
+            if i % 5 == 0:
+                self._reset_simulation()
+                self._robot.reset()
+                self._robot.update()
+
     def _global_planner_callback(self, message: Path):
         if self.path:  # update path only at the start of the episode
             return
 
         self.path = [pose_stamped.pose.position for pose_stamped in message.poses]
-        logger.info(f"{self.path=}")

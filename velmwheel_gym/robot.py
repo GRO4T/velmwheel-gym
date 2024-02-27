@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 ROBOT_MOVEMENT_TOPIC = "/velmwheel/base/velocity_setpoint"
 ROBOT_POSE_SIMULATION_TOPIC = "/velmwheel/sim/pose"
 ROBOT_COLLISION_TOPIC = "/velmwheel/contacts"
+ODOM_LASER_POSE_TOPIC = "/velmwheel/odom/laser/pose"
 LASER_SCAN_MATCHER_SET_POSE_TOPIC = "/velmwheel/laser_scan_matcher/set_pose"
 NAVIGATION_INITIAL_POSE_TOPIC = "/initialpose"
 ENCODERS_SET_POSE_TOPIC = "/velmwheel/odom/encoders/set_pose"
@@ -25,6 +26,7 @@ class VelmwheelRobot:
     def __init__(self):
         self._is_collide = False
         self._position: Point = None
+        self._simulation_time = 0
 
         # ROS related stuff
         self._node = rclpy.create_node(self.__class__.__name__)
@@ -43,12 +45,6 @@ class VelmwheelRobot:
             NAVIGATION_INITIAL_POSE_TOPIC,
             qos_profile=qos_profile_system_default,
         )
-        self._position_sub = self._node.create_subscription(
-            PoseStamped,
-            ROBOT_POSE_SIMULATION_TOPIC,
-            self._position_callback,
-            qos_profile=qos_profile_system_default,
-        )
         self._encoders_set_pose_pub = self._node.create_publisher(
             Pose,
             ENCODERS_SET_POSE_TOPIC,
@@ -59,6 +55,18 @@ class VelmwheelRobot:
             ContactState,
             ROBOT_COLLISION_TOPIC,
             self._collision_callback,
+            qos_profile=qos_profile_system_default,
+        )
+        self._odom_laser_pose_sub = self._node.create_subscription(
+            PoseStamped,
+            ODOM_LASER_POSE_TOPIC,
+            self._odom_laser_pose_callback,
+            qos_profile=qos_profile_system_default,
+        )
+        self._position_sub = self._node.create_subscription(
+            PoseStamped,
+            ROBOT_POSE_SIMULATION_TOPIC,
+            self._position_callback,
             qos_profile=qos_profile_system_default,
         )
 
@@ -99,14 +107,17 @@ class VelmwheelRobot:
 
     def _collision_callback(self, _):
         self._is_collide = True
-        # logger.debug(f"Received collision msg: {message}")
+
+    def _odom_laser_pose_callback(self, message: PoseStamped):
+        self._simulation_time = message.header.stamp.sec
+        logger.debug(f"Simulation time: {self._simulation_time}")
+        logger.debug(f"Laser odom pose: {message.pose}")
 
     def _position_callback(self, message: PoseStamped):
         if self._position is None:
             logger.debug(f"Position after reset: {message.pose.position}")
         p = message.pose.position
         self._position = Point(x=p.x, y=p.y)
-        # self._publish_nav_initial_pose()
 
     def _publish_nav_initial_pose(self):
         initial_pose = PoseWithCovarianceStamped()
@@ -117,9 +128,10 @@ class VelmwheelRobot:
 
     def _reset_laser_scan_matcher_pose(self):
         """Resets pose estimation of laser-based odometry."""
+        logger.debug("Reset laser scan matcher pose")
         req = self._laser_scan_matcher_set_pose_srv.request
         req.pose.header.frame_id = "odom"
-        req.pose.header.stamp.sec = int(time.time())
+        req.pose.header.stamp.sec = self._simulation_time + 1
         req.pose.pose.position.x = 0.0
         req.pose.pose.position.y = 0.0
         req.pose.pose.position.z = 0.0
@@ -130,6 +142,7 @@ class VelmwheelRobot:
         call_service(self._laser_scan_matcher_set_pose_srv)
 
     def _reset_encoders_pose(self):
+        logger.debug("Reset encoders pose")
         pose = Pose()
         pose.position.x = 0.0
         pose.position.y = 0.0
