@@ -26,6 +26,7 @@ GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 
 class VelmwheelEnv(gym.Env):
     def __init__(self):
+        logger.debug("Creating VelmwheelEnv")
         super().__init__()
 
         # gym related stuff
@@ -60,6 +61,8 @@ class VelmwheelEnv(gym.Env):
 
         self._episode = 0  # TODO: use episode count from gym.Env
 
+        logger.debug("VelmwheelEnv created")
+
     @property
     def goal(self) -> Point:
         """Robot's navigation goal."""
@@ -88,27 +91,17 @@ class VelmwheelEnv(gym.Env):
         self._path = path
 
     def step(self, action):
-        logger.debug("==== GRO4T (1) ====")
         rclpy.spin_once(self._node, timeout_sec=1.0)
-        logger.debug("==== GRO4T (1) ====")
         self._robot.move(action)
-        logger.debug("==== GRO4T (1) ====")
         self._robot.update()
-        logger.debug("==== GRO4T (1) ====")
 
         obs = self._observe()
-        logger.debug("==== GRO4T (1) ====")
 
         dist_to_goal = self._calculate_distance_to_goal(obs)
-        logger.debug("==== GRO4T (1) ====")
 
-        logger.debug("==== GRO4T (1) ====")
         reward = self._calculate_reward(dist_to_goal)
-        logger.debug("==== GRO4T (1) ====")
         done = self._robot.is_collide or dist_to_goal < self._min_goal_dist
-        logger.debug("==== GRO4T (1) ====")
         info = {}
-        logger.debug("==== GRO4T (1) ====")
 
         return obs, reward, done, info
 
@@ -152,9 +145,9 @@ class VelmwheelEnv(gym.Env):
         return 0.0
 
     def _reset_simulation(self):
+        # TODO: use wait_for_service from utils
         while not self._reset_world_srv.wait_for_service(timeout_sec=1.0):
-            print(f"Waiting for {RESET_SIMULATION_TOPIC} service...")
-            logger.info(
+            logger.debug(
                 f"{RESET_SIMULATION_TOPIC} service not available, waiting again..."
             )
 
@@ -179,16 +172,9 @@ class VelmwheelEnv(gym.Env):
         self._navigation_goal_pub.publish(goal)
 
     def _wait_for_new_path(self):
-        i = 0
         while not self.path:
-            print("Waiting for global planner to calculate a new path")
-            logger.info("Waiting for global planner to calculate a new path")
+            logger.debug("Waiting for global planner to calculate a new path")
             rclpy.spin_once(self._node, timeout_sec=1.0)
-            i += 1
-            if i % 5 == 0:
-                self._reset_simulation()
-                self._robot.reset()
-                self._robot.update()
 
     def _global_planner_callback(self, message: Path):
         if self.path:  # update path only at the start of the episode

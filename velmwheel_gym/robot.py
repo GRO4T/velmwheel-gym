@@ -24,6 +24,8 @@ ENCODERS_SET_POSE_TOPIC = "/velmwheel/odom/encoders/set_pose"
 
 class VelmwheelRobot:
     def __init__(self):
+        logger.debug("Creating VelmwheelRobot")
+
         self._is_collide = False
         self._position: Point = None
         self._simulation_time = 0
@@ -70,6 +72,8 @@ class VelmwheelRobot:
             qos_profile=qos_profile_system_default,
         )
 
+        logger.debug("VelmwheelRobot created")
+
     @property
     def position(self) -> Point:
         """Current robot's position"""
@@ -110,8 +114,6 @@ class VelmwheelRobot:
 
     def _odom_laser_pose_callback(self, message: PoseStamped):
         self._simulation_time = message.header.stamp.sec
-        logger.debug(f"Simulation time: {self._simulation_time}")
-        logger.debug(f"Laser odom pose: {message.pose}")
 
     def _position_callback(self, message: PoseStamped):
         if self._position is None:

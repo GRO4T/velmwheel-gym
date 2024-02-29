@@ -13,8 +13,7 @@ RosServiceClientWrapper = namedtuple(
 
 def wait_for_service(service_client: Client, ros_topic: str):
     while not service_client.wait_for_service(timeout_sec=1.0):
-        print(f"Waiting for {ros_topic} service...")
-        logger.info(f"{ros_topic} service not available, waiting again...")
+        logger.debug(f"{ros_topic} service not available, waiting again...")
 
 
 def create_ros_service_client(
