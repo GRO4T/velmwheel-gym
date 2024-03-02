@@ -28,7 +28,7 @@ class VelmwheelRobot:
 
         self._is_collide = False
         self._position: Point = None
-        self._simulation_time = 0
+        self._simulation_time = None
 
         # ROS related stuff
         self._node = rclpy.create_node(self.__class__.__name__)
@@ -95,7 +95,7 @@ class VelmwheelRobot:
     def update(self):
         """Updates robot's state measurements."""
         rclpy.spin_once(self._node)
-        while self._position is None:
+        while self._position is None or self._simulation_time is None:
             rclpy.spin_once(self._node)
 
     def move(self, action):

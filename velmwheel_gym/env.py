@@ -15,11 +15,14 @@ from std_srvs.srv import Empty
 from velmwheel_gym.constants import DEFAULT_QOS_PROFILE
 from velmwheel_gym.robot import VelmwheelRobot
 from velmwheel_gym.types import Point
+from velmwheel_gym.utils import call_service, create_ros_service_client
 
 logger = logging.getLogger(__name__)
 
-
-RESET_SIMULATION_TOPIC = "/reset_world"
+START_SIM_TOPIC = "/start_sim"
+STOP_SIM_TOPIC = "/stop_sim"
+RESTART_SIM_TOPIC = "/restart_sim"
+RESET_WORLD_TOPIC = "/reset_world"
 NAVIGATION_GOAL_TOPIC = "/goal_pose"
 GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 
@@ -29,7 +32,6 @@ class VelmwheelEnv(gym.Env):
         logger.debug("Creating VelmwheelEnv")
         super().__init__()
 
-        # gym related stuff
         self.action_space = gym.spaces.Discrete(5)
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(4,), dtype=np.float64
@@ -38,26 +40,38 @@ class VelmwheelEnv(gym.Env):
         self._min_goal_dist: float = 0
         self._path = None
 
-        # ROS related stuff
         rclpy.init()
         self._node = rclpy.create_node(self.__class__.__name__)
-        # services
-        self._reset_world_srv = self._node.create_client(Empty, RESET_SIMULATION_TOPIC)
-        # publishers
+
+        self._start_sim_srv = create_ros_service_client(
+            self._node, Empty, START_SIM_TOPIC
+        )
+        self._stop_sim_srv = create_ros_service_client(
+            self._node, Empty, STOP_SIM_TOPIC
+        )
+        self._restart_sim_srv = create_ros_service_client(
+            self._node, Empty, RESTART_SIM_TOPIC
+        )
+
+        call_service(self._start_sim_srv)
+
+        self._reset_world_srv = self._node.create_client(Empty, RESET_WORLD_TOPIC)
+
         self._navigation_goal_pub = self._node.create_publisher(
             PoseStamped,
             NAVIGATION_GOAL_TOPIC,
             qos_profile=DEFAULT_QOS_PROFILE,
         )
-        # subscribers
+
         self._navigation_plan_sub = self._node.create_subscription(
             Path,
             GLOBAL_PLANNER_PATH_TOPIC,
             self._global_planner_callback,
             qos_profile=qos_profile_system_default,
         )
-        # robot class
+
         self._robot = VelmwheelRobot()
+        self._robot.update()
 
         self._episode = 0  # TODO: use episode count from gym.Env
 
@@ -108,13 +122,9 @@ class VelmwheelEnv(gym.Env):
     def reset(self):
         self._reset_simulation()
         self._robot.reset()
-        self._robot.update()
 
         self.path = None
-
-        self._set_new_goal()
-        self._publish_new_goal()
-
+        self._generate_next_goal()
         self._wait_for_new_path()
 
         return self._observe()
@@ -147,14 +157,12 @@ class VelmwheelEnv(gym.Env):
     def _reset_simulation(self):
         # TODO: use wait_for_service from utils
         while not self._reset_world_srv.wait_for_service(timeout_sec=1.0):
-            logger.debug(
-                f"{RESET_SIMULATION_TOPIC} service not available, waiting again..."
-            )
+            logger.debug(f"{RESET_WORLD_TOPIC} service not available, waiting again...")
 
         reset_future = self._reset_world_srv.call_async(Empty.Request())
         rclpy.spin_until_future_complete(self._node, reset_future)
 
-    def _set_new_goal(self):
+    def _generate_next_goal(self):
         available_goals = [
             Point(3.0, 3.0),
             Point(3.0, -3.0),
@@ -164,7 +172,7 @@ class VelmwheelEnv(gym.Env):
         self.goal = random.choice(available_goals)
         logger.debug(f"{self.goal=}")
 
-    def _publish_new_goal(self):
+    def _publish_goal(self):
         goal = PoseStamped()
         goal.header.frame_id = "map"
         goal.pose.position.x = self.goal.x
@@ -174,6 +182,7 @@ class VelmwheelEnv(gym.Env):
     def _wait_for_new_path(self):
         while not self.path:
             logger.debug("Waiting for global planner to calculate a new path")
+            self._publish_goal()
             rclpy.spin_once(self._node, timeout_sec=1.0)
 
     def _global_planner_callback(self, message: Path):
