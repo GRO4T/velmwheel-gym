@@ -26,6 +26,8 @@ RESET_WORLD_TOPIC = "/reset_world"
 NAVIGATION_GOAL_TOPIC = "/goal_pose"
 GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 
+WAIT_FOR_NEW_PATH_TIMEOUT_SEC = 30
+
 
 class VelmwheelEnv(gym.Env):
     def __init__(self):
@@ -125,7 +127,9 @@ class VelmwheelEnv(gym.Env):
 
         self.path = None
         self._generate_next_goal()
-        self._wait_for_new_path()
+
+        while not self._wait_for_new_path(WAIT_FOR_NEW_PATH_TIMEOUT_SEC):
+            call_service(self._restart_sim_srv)
 
         return self._observe()
 
@@ -179,11 +183,17 @@ class VelmwheelEnv(gym.Env):
         goal.pose.position.y = self.goal.y
         self._navigation_goal_pub.publish(goal)
 
-    def _wait_for_new_path(self):
+    def _wait_for_new_path(self, timeout_sec: int) -> bool:
+        total = 0
         while not self.path:
             logger.debug("Waiting for global planner to calculate a new path")
             self._publish_goal()
             rclpy.spin_once(self._node, timeout_sec=1.0)
+            total += 1
+            if total > timeout_sec:
+                logger.debug("Timeout reached")
+                return False
+        return True
 
     def _global_planner_callback(self, message: Path):
         if self.path:  # update path only at the start of the episode

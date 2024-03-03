@@ -1,9 +1,15 @@
 from gym.envs.registration import register
 
 register(
+    id="Velmwheel10-v1",
+    entry_point="velmwheel_gym.env:VelmwheelEnv",
+    max_episode_steps=10,
+)
+
+register(
     id="Velmwheel25-v1",
     entry_point="velmwheel_gym.env:VelmwheelEnv",
-    max_episode_steps=50,
+    max_episode_steps=25,
 )
 
 register(
