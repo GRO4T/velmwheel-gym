@@ -13,6 +13,7 @@ from rclpy.qos import qos_profile_system_default
 from std_srvs.srv import Empty
 
 from velmwheel_gym.constants import DEFAULT_QOS_PROFILE
+from velmwheel_gym.global_guidance_path import GlobalGuidancePath
 from velmwheel_gym.robot import VelmwheelRobot
 from velmwheel_gym.types import Point
 from velmwheel_gym.utils import call_service, create_ros_service_client
@@ -40,7 +41,7 @@ class VelmwheelEnv(gym.Env):
         )
         self._goal: Point = None
         self._min_goal_dist: float = 0
-        self._path = None
+        self._global_guidance_path = None
 
         rclpy.init()
         self._node = rclpy.create_node(self.__class__.__name__)
@@ -97,15 +98,6 @@ class VelmwheelEnv(gym.Env):
     def min_goal_dist(self, dist: float):
         self._min_goal_dist = dist
 
-    @property
-    def path(self) -> list[Point]:
-        """Path calculated by global planner."""
-        return self._path
-
-    @path.setter
-    def path(self, path: list[Point]):
-        self._path = path
-
     def step(self, action):
         rclpy.spin_once(self._node, timeout_sec=1.0)
         self._robot.move(action)
@@ -114,18 +106,20 @@ class VelmwheelEnv(gym.Env):
         obs = self._observe()
 
         dist_to_goal = self._calculate_distance_to_goal(obs)
+        num_passed_points = self._global_guidance_path.update(self._robot.position)
 
-        reward = self._calculate_reward(dist_to_goal)
+        reward = self._calculate_reward(dist_to_goal, num_passed_points)
         done = self._robot.is_collide or dist_to_goal < self._min_goal_dist
         info = {}
 
+        logger.debug(f"{self._episode=}, {action=}, {reward=}, {done=}")
         return obs, reward, done, info
 
     def reset(self):
         self._reset_simulation()
         self._robot.reset()
 
-        self.path = None
+        self._global_guidance_path = None
         self._generate_next_goal()
 
         while not self._wait_for_new_path(WAIT_FOR_NEW_PATH_TIMEOUT_SEC):
@@ -147,7 +141,7 @@ class VelmwheelEnv(gym.Env):
         pos_x, pos_y, *_ = obs
         return math.dist(self._goal, (pos_x, pos_y))
 
-    def _calculate_reward(self, dist_to_goal: float) -> float:
+    def _calculate_reward(self, dist_to_goal: float, num_passed_points: int) -> float:
         if self._robot.is_collide:
             logger.debug("FAILURE: Robot collided with an obstacle")
             return -1.0
@@ -156,7 +150,9 @@ class VelmwheelEnv(gym.Env):
             logger.debug(f"SUCCESS: Robot reached goal at {self._goal=}")
             return 1.0
 
-        return 0.0
+        return 0.5 * (
+            num_passed_points / self._global_guidance_path.original_num_points
+        )
 
     def _reset_simulation(self):
         # TODO: use wait_for_service from utils
@@ -185,7 +181,7 @@ class VelmwheelEnv(gym.Env):
 
     def _wait_for_new_path(self, timeout_sec: int) -> bool:
         total = 0
-        while not self.path:
+        while not self._global_guidance_path:
             logger.debug("Waiting for global planner to calculate a new path")
             self._publish_goal()
             rclpy.spin_once(self._node, timeout_sec=1.0)
@@ -196,7 +192,22 @@ class VelmwheelEnv(gym.Env):
         return True
 
     def _global_planner_callback(self, message: Path):
-        if self.path:  # update path only at the start of the episode
+        if self._global_guidance_path:  # update path only at the start of the episode
             return
 
-        self.path = [pose_stamped.pose.position for pose_stamped in message.poses]
+        points = [pose_stamped.pose.position for pose_stamped in message.poses]
+        self._global_guidance_path = GlobalGuidancePath(points)
+
+        logger.debug(f"New path has {len(points)} points")
+
+        logger.debug(f"First point in the path: {points[0]}")
+        logger.debug(f"Last point in the path: {points[-1]}")
+
+        n = 0
+        dist = 0
+        for i in range(1, len(points)):
+            n += 1
+            p1 = (points[i - 1].x, points[i - 1].y)
+            p2 = (points[i].x, points[i].y)
+            dist += math.dist(p1, p2)
+        logger.debug(f"Average distance between points: {dist / n} meters")
