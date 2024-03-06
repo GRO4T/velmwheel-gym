@@ -1,5 +1,4 @@
 import logging
-import time
 
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped, Twist
@@ -7,7 +6,7 @@ from rclpy.qos import qos_profile_system_default
 from scan_tools_msgs.srv import SetPose
 from velmwheel_gazebo_msgs.msg import ContactState
 
-from velmwheel_gym.constants import ACTION_TO_DIRECTION
+from velmwheel_gym.constants import ACTION_TO_DIRECTION, BASE_STEP_TIME
 from velmwheel_gym.types import Point
 from velmwheel_gym.utils import call_service, create_ros_service_client
 
@@ -28,7 +27,10 @@ class VelmwheelRobot:
 
         self._is_collide = False
         self._position: Point = None
-        self._simulation_time = None
+        self._position_tstamp_sec: int = None
+        self._position_tstamp_nanosec: int = None
+        self._simulation_time: int = None
+        self._real_time_factor: float = 1.0
 
         # ROS related stuff
         self._node = rclpy.create_node(self.__class__.__name__)
@@ -80,21 +82,39 @@ class VelmwheelRobot:
         return self._position
 
     @property
+    def position_tstamp(self) -> str:
+        """Timestamp of the last received position."""
+        return f"{self._position_tstamp_sec}.{self._position_tstamp_nanosec}"
+
+    @property
     def is_collide(self) -> bool:
         """Flag signalling whether robot's is in collision with an obstacle."""
         return self._is_collide
+
+    @property
+    def real_time_factor(self) -> float:
+        """Real time factor for the simulation."""
+        return self._real_time_factor
+
+    @real_time_factor.setter
+    def real_time_factor(self, factor: float):
+        self._real_time_factor = factor
 
     def reset(self):
         """Resets robot's state."""
         self.move(0)
         self._is_collide = False
-        self._position = None
         self._reset_laser_scan_matcher_pose()
         self._reset_encoders_pose()
+        self._position = None
 
     def update(self):
         """Updates robot's state measurements."""
-        rclpy.spin_once(self._node)
+        # NOTE: 50% of step time (adjusted for real time factor)
+        # can be spent waiting for environment measurements
+        rclpy.spin_once(
+            self._node, timeout_sec=0.5 * BASE_STEP_TIME / self.real_time_factor
+        )
         while self._position is None or self._simulation_time is None:
             rclpy.spin_once(self._node)
 
@@ -107,7 +127,6 @@ class VelmwheelRobot:
         motion_cmd.linear.y = direction[1]
 
         self._movement_pub.publish(motion_cmd)
-        time.sleep(0.16 / 6)
 
     def _collision_callback(self, _):
         self._is_collide = True
@@ -120,6 +139,8 @@ class VelmwheelRobot:
             logger.debug(f"Position after reset: {message.pose.position}")
         p = message.pose.position
         self._position = Point(x=p.x, y=p.y)
+        self._position_tstamp_sec = message.header.stamp.sec
+        self._position_tstamp_nanosec = message.header.stamp.nanosec
 
     def _publish_nav_initial_pose(self):
         initial_pose = PoseWithCovarianceStamped()

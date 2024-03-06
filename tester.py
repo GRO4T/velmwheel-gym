@@ -57,12 +57,14 @@ param_reader = ParameterReader(args, config)
 gym_env = param_reader.read("gym_env")
 model_path = param_reader.read("model")
 replay_buffer_path = param_reader.read("replay_buffer")
+real_time_factor = float(param_reader.read("real_time_factor"))
 
 # ---------------------------------------------------------------------------- #
 #                               Testing the model                              #
 # ---------------------------------------------------------------------------- #
 
 env = gym.make(gym_env)
+env.env.real_time_factor = real_time_factor
 
 model = DQN.load(model_path)
 model.load_replay_buffer(replay_buffer_path)

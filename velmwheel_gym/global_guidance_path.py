@@ -31,6 +31,5 @@ class GlobalGuidancePath:
                 last_passed_point = i
         if last_passed_point is not None:
             self._points = self._points[last_passed_point + 1 :]
-            logger.debug(f"Passed {last_passed_point + 1} points.")
             return last_passed_point + 1
         return 0

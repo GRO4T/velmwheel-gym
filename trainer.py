@@ -61,6 +61,7 @@ model_path = param_reader.read("model")
 replay_buffer_path = param_reader.read("replay_buffer")
 timesteps = int(param_reader.read("timesteps"))
 min_goal_dist = float(param_reader.read("min_goal_dist"))
+real_time_factor = float(param_reader.read("real_time_factor"))
 
 # ---------------------------------------------------------------------------- #
 #                               Helper functions                               #
@@ -85,7 +86,7 @@ def get_model_save_path(model_path: str, replay_buffer_path: str) -> str:
 
 # Define model saving callback
 checkpoint_callback = CheckpointCallback(
-    save_freq=10000,
+    save_freq=1000,
     save_path=get_model_save_path(model_path, replay_buffer_path),
     name_prefix="dqn",
     save_replay_buffer=True,
@@ -96,20 +97,21 @@ checkpoint_callback = CheckpointCallback(
 model = None
 env = gym.make(gym_env)
 env.env.min_goal_dist = min_goal_dist
+env.env.real_time_factor = real_time_factor
 
 if model_path:
-    model = DQN.load(model_path)
+    model = DQN.load(model_path, env=env, exploration_final_eps=0.0)
     model.load_replay_buffer(replay_buffer_path)
-    model.set_env(env)
 else:
     model = DQN(
         "MlpPolicy",
         env,
+        exploration_final_eps=0.0,
+        learning_rate=0.001,
+        learning_starts=500,
+        target_update_interval=100,
         verbose=1,
         tensorboard_log="./logs/tensorboard",
-        learning_starts=0,
-        target_update_interval=1000,
-        learning_rate=0.001,
         device="cuda",
     )
 
