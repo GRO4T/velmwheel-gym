@@ -41,7 +41,9 @@ class VelmwheelEnv(gym.Env):
         logger.debug("Creating VelmwheelEnv")
         super().__init__()
 
-        self.action_space = gym.spaces.Discrete(5)
+        self.action_space = gym.spaces.Box(
+            low=-1.0, high=1.0, shape=(2,), dtype=np.float64
+        )
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(6,), dtype=np.float64
         )
@@ -165,20 +167,25 @@ class VelmwheelEnv(gym.Env):
 
     def close(self):
         logger.info("Closing " + self.__class__.__name__ + " environment.")
-        self._robot.move(0)
+        self._robot.move([0.0, 0.0])
         self._node.destroy_node()
         rclpy.shutdown()
 
     def _observe(self) -> np.array:
         position = self._robot.position
+        first_path_point = (
+            self._global_guidance_path.points[0]
+            if self._global_guidance_path.points
+            else self.goal
+        )
         return np.array(
             [
                 position.x,
                 position.y,
                 self._goal.x,
                 self._goal.y,
-                self._global_guidance_path.points[0].x,
-                self._global_guidance_path.points[0].y,
+                first_path_point.x,
+                first_path_point.y,
             ]
         )
 
@@ -191,15 +198,16 @@ class VelmwheelEnv(gym.Env):
     ) -> tuple[float, bool]:
         if self._robot.is_collide:
             logger.debug("FAILURE: Robot collided with an obstacle")
-            return -1.0, True
+            return -5.0, True
 
         if dist_to_goal < self._min_goal_dist:
             logger.debug(f"SUCCESS: Robot reached goal at {self._goal=}")
-            return 1.0, True
+            return 5.0, True
 
         detour_penalty = 0
         if (
-            self._global_guidance_path.points[0].dist(self._robot.position)
+            self._global_guidance_path.points
+            and self._global_guidance_path.points[0].dist(self._robot.position)
             >= POINT_REACHED_THRESHOLD
         ):
             detour_penalty = -1 / self.spec.max_episode_steps
@@ -220,11 +228,11 @@ class VelmwheelEnv(gym.Env):
     def _generate_next_goal(self):
         available_goals = [
             Point(3.0, 3.0),
-            # Point(3.0, -3.0),
-            # Point(-3.0, 3.0),
-            # Point(-3.0, -3.0),
+            Point(3.0, -3.0),
+            Point(-3.0, 3.0),
+            Point(-3.0, -3.0),
         ]
-        self.goal = random.choice(available_goals)
+        self.goal = random.SystemRandom().choice(available_goals)
         logger.debug(f"{self.goal=}")
 
     def _publish_goal(self):
@@ -254,6 +262,9 @@ class VelmwheelEnv(gym.Env):
             Point(pose_stamped.pose.position.x, pose_stamped.pose.position.y)
             for pose_stamped in message.poses
         ]
+
+        if not points:
+            return
 
         # NOTE: This is only for debugging
         logger.debug(f"New path has {len(points)} points")

@@ -6,7 +6,7 @@ from rclpy.qos import qos_profile_system_default
 from scan_tools_msgs.srv import SetPose
 from velmwheel_gazebo_msgs.msg import ContactState
 
-from velmwheel_gym.constants import ACTION_TO_DIRECTION, BASE_STEP_TIME
+from velmwheel_gym.constants import BASE_STEP_TIME
 from velmwheel_gym.types import Point
 from velmwheel_gym.utils import call_service, create_ros_service_client
 
@@ -102,7 +102,7 @@ class VelmwheelRobot:
 
     def reset(self):
         """Resets robot's state."""
-        self.move(0)
+        self.move([0.0, 0.0])
         self._is_collide = False
         self._reset_laser_scan_matcher_pose()
         self._reset_encoders_pose()
@@ -122,9 +122,8 @@ class VelmwheelRobot:
         """Sends movement controls to the robot."""
         motion_cmd = Twist()
 
-        direction = ACTION_TO_DIRECTION[action]
-        motion_cmd.linear.x = direction[0]
-        motion_cmd.linear.y = direction[1]
+        motion_cmd.linear.x = action[0]
+        motion_cmd.linear.y = action[1]
 
         self._movement_pub.publish(motion_cmd)
 
