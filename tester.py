@@ -1,11 +1,10 @@
-import argparse
 import configparser
 import math
 
 import gym
-from stable_baselines3 import DQN
+from stable_baselines3 import DDPG
 
-from velmwheel_gym.constants import ACTION_TO_DIRECTION
+from velmwheel_ai.common import ParameterReader, bootstrap_argument_parser, load_model
 from velmwheel_gym.env import VelmwheelEnv
 from velmwheel_gym.logger import init_logging
 from velmwheel_gym.types import Point
@@ -13,50 +12,19 @@ from velmwheel_gym.types import Point
 init_logging()
 
 # ---------------------------------------------------------------------------- #
-#                               Argument parsing                               #
+#                                 Configuration                                #
 # ---------------------------------------------------------------------------- #
 
-parser = argparse.ArgumentParser(
-    prog="Tester script",
-    description="Script for testing reinforcement learning models for WUT Velmwheel robot",
-)
-parser.add_argument(
-    "--gym_env", type=str, help="Name of the Gym environment", required=False
-)
-parser.add_argument("--model", type=str, help="Model to load path", required=False)
-parser.add_argument(
-    "--replay_buffer", type=str, help="Replay buffer to load", required=False
-)
-
-args = parser.parse_args()
-
-# ---------------------------------------------------------------------------- #
-#                             Reading configuration                            #
-# ---------------------------------------------------------------------------- #
-
+args = bootstrap_argument_parser().parse_args()
 config = configparser.ConfigParser()
 config.read(["config.ini"])
-
-
-# ---------------------------------------------------------------------------- #
-#                             Evaluating parameters                            #
-# ---------------------------------------------------------------------------- #
-class ParameterReader:
-    def __init__(self, args: argparse.Namespace, config: configparser.ConfigParser):
-        self._args = args
-        self._config = config
-
-    def read(self, name: str):
-        value = self._config.get("tester", name) if self._config else self._args[name]
-        print(f"{name}={value}")
-        return value
-
-
 param_reader = ParameterReader(args, config)
 
 gym_env = param_reader.read("gym_env")
+algorithm = param_reader.read("algorithm")
 model_path = param_reader.read("model")
 replay_buffer_path = param_reader.read("replay_buffer")
+goal_reached_threshold = float(param_reader.read("goal_reached_threshold"))
 real_time_factor = float(param_reader.read("real_time_factor"))
 
 # ---------------------------------------------------------------------------- #
@@ -66,13 +34,12 @@ real_time_factor = float(param_reader.read("real_time_factor"))
 env = gym.make(gym_env)
 env.env.real_time_factor = real_time_factor
 
-model = DQN.load(model_path)
-model.load_replay_buffer(replay_buffer_path)
-model.set_env(env)
+model = DDPG.load(model_path, env=env)
+model = load_model(algorithm, env, model_path, replay_buffer_path)
 
 obs = env.reset()
 
-goal = [3, 3]
+goal = [-3, 3]
 min_dist_to_goal = math.inf
 
 env.env.goal = Point(*goal)
@@ -80,10 +47,10 @@ env.env.goal = Point(*goal)
 while True:
     action, _states = model.predict(obs, deterministic=True)
 
-    obs, rewards, dones, info = env.step(int(action))
+    obs, rewards, dones, info = env.step(action)
 
     print("----------------------------------------------")
-    print(f"direction={ACTION_TO_DIRECTION[int(action)]}")
+    print(f"action={action}")
     print(f"{obs=}")
     pos_x, pos_y, *_ = obs
     dist_to_goal = math.dist(goal, (pos_x, pos_y))
@@ -94,5 +61,6 @@ while True:
     if dist_to_goal < min_dist_to_goal:
         min_dist_to_goal = dist_to_goal
 
-    if dist_to_goal < 0.1:
+    if dist_to_goal < goal_reached_threshold:
+        env.env._robot.move([0.0, 0.0])
         break
