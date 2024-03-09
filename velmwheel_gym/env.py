@@ -1,5 +1,3 @@
-""" TODO(kolasdam): write docstring. """
-
 import logging
 import math
 import random
@@ -33,7 +31,6 @@ GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 
 WAIT_FOR_NEW_PATH_TIMEOUT_SEC = 30
 MAP_FRAME_POSITION_ERROR_TOLERANCE = 0.5
-GLOBAL_GUIDANCE_FOLLOWING_FULL_REWARD = 0.5
 
 
 class VelmwheelEnv(gym.Env):
@@ -136,11 +133,6 @@ class VelmwheelEnv(gym.Env):
         reward, done = self._calculate_reward(dist_to_goal, num_passed_points)
         info = {}
 
-        if dist_to_goal < 4.0:
-            logger.debug(
-                f"episode={self._episode} {action=} {reward=} {done=} {dist_to_goal=} {num_passed_points=} goal={self._goal} position={self._robot.position} position_tstamp={self._robot.position_tstamp}"
-            )
-
         end = time.time()
         elapsed = end - start
         if elapsed < step_time:
@@ -173,19 +165,28 @@ class VelmwheelEnv(gym.Env):
 
     def _observe(self) -> np.array:
         position = self._robot.position
-        first_path_point = (
-            self._global_guidance_path.points[0]
-            if self._global_guidance_path.points
-            else self.goal
-        )
+
+        if not self._global_guidance_path.points:
+            logger.warning("No global guidance path points")
+            return np.array(
+                [
+                    position.x,
+                    position.y,
+                    self._goal.x,
+                    self._goal.y,
+                    self._goal.x,
+                    self._goal.y,
+                ]
+            )
+
         return np.array(
             [
                 position.x,
                 position.y,
                 self._goal.x,
                 self._goal.y,
-                first_path_point.x,
-                first_path_point.y,
+                self._global_guidance_path.points[0].x,
+                self._global_guidance_path.points[0].y,
             ]
         )
 
@@ -210,8 +211,8 @@ class VelmwheelEnv(gym.Env):
             and self._global_guidance_path.points[0].dist(self._robot.position)
             >= POINT_REACHED_THRESHOLD
         ):
-            detour_penalty = -1 / self.spec.max_episode_steps
-        global_guidance_following_reward = GLOBAL_GUIDANCE_FOLLOWING_FULL_REWARD * (
+            detour_penalty = -1.0 / self.spec.max_episode_steps
+        global_guidance_following_reward = 1.0 * (
             num_passed_points / self._global_guidance_path.original_num_points
         )
 
@@ -266,26 +267,30 @@ class VelmwheelEnv(gym.Env):
         if not points:
             return
 
-        # NOTE: This is only for debugging
-        logger.debug(f"New path has {len(points)} points")
-        logger.debug(f"First point in the path: {points[0]}")
-        logger.debug(f"Last point in the path: {points[-1]}")
-        n = 0
-        dist = 0
-        for i in range(1, len(points)):
-            n += 1
-            p1 = (points[i - 1].x, points[i - 1].y)
-            p2 = (points[i].x, points[i].y)
-            dist += math.dist(p1, p2)
-        logger.debug(f"Average distance between points: {dist / n} meters")
+        self._analyze_path(points)
 
-        if (
-            abs(points[0].x) > MAP_FRAME_POSITION_ERROR_TOLERANCE
-            or abs(points[0].y) > MAP_FRAME_POSITION_ERROR_TOLERANCE
-        ):
+        if points[0].dist(Point(0, 0)) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
             logger.warning(
                 f"Path rejected: First point in the path is not close to the (0, 0): {points[0]}"
             )
             return
 
+        if points[-1].dist(self.goal) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
+            logger.warning(
+                f"Path rejected: Last point in the path is not close to the goal ({self.goal}): {points[-1]}"
+            )
+            return
+
         self._global_guidance_path = GlobalGuidancePath(points)
+
+    def _analyze_path(self, points: list[Point]):
+        logger.debug(f"New path has {len(points)} points")
+        logger.debug(f"First point in the path: {points[0]}")
+        logger.debug(f"Last point in the path: {points[-1]}")
+        dist = 0
+        n = len(points)
+        for i in range(1, n):
+            p1 = (points[i - 1].x, points[i - 1].y)
+            p2 = (points[i].x, points[i].y)
+            dist += math.dist(p1, p2)
+        logger.debug(f"Average distance between points: {dist / n-1} meters")
