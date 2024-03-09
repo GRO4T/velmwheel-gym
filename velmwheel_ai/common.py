@@ -4,7 +4,7 @@ import os
 
 import gym
 import numpy as np
-from stable_baselines3 import DDPG, TD3
+from stable_baselines3 import DDPG, PPO, SAC, TD3
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.noise import (
     NormalActionNoise,
@@ -27,7 +27,10 @@ def get_model_save_path_and_tb_log_name(
     algorithm: str, model_path: str
 ) -> tuple[str, str]:
     if model_path:
-        return os.path.dirname(model_path)
+        return (
+            os.path.dirname(model_path),
+            f"{algorithm}_{os.path.basename(os.path.dirname(model_path))}",
+        )
 
     model_save_dir = f"./models/velmwheel_v1/{algorithm.lower()}"
     run_id = 1
@@ -65,8 +68,29 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
             )
+        case "PPO":
+            return PPO(
+                "MlpPolicy",
+                env,
+                verbose=1,
+                tensorboard_log="./logs/tensorboard",
+                device="cuda",
+            )
+        case "SAC":
+            return SAC(
+                "MlpPolicy",
+                env,
+                verbose=1,
+                tensorboard_log="./logs/tensorboard",
+                device="cuda",
+            )
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
+
+
+def _load_replay_buffer(model: BaseAlgorithm, replay_buffer_path: str):
+    model.load_replay_buffer(replay_buffer_path)
+    print(f"Replay buffer loaded: {model.replay_buffer.size()} transitions")
 
 
 def load_model(
@@ -76,12 +100,19 @@ def load_model(
         case "DDPG":
             model = DDPG.load(model_path, env=env)
             if replay_buffer_path:
-                model.load_replay_buffer(replay_buffer_path)
+                _load_replay_buffer(model, replay_buffer_path)
             return model
         case "TD3":
             model = TD3.load(model_path, env=env)
             if replay_buffer_path:
-                model.load_replay_buffer(replay_buffer_path)
+                _load_replay_buffer(model, replay_buffer_path)
+            return model
+        case "PPO":
+            return PPO.load(model_path, env=env)
+        case "SAC":
+            model = SAC.load(model_path, env=env)
+            if replay_buffer_path:
+                _load_replay_buffer(model, replay_buffer_path)
             return model
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")

@@ -2,7 +2,11 @@ import argparse
 import configparser
 
 import gym
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import (
+    CheckpointCallback,
+    EvalCallback,
+    StopTrainingOnNoModelImprovement,
+)
 
 from velmwheel_ai.common import (
     ParameterReader,
@@ -44,14 +48,6 @@ model_save_path, tb_log_name = get_model_save_path_and_tb_log_name(
     algorithm, model_path
 )
 
-checkpoint_callback = CheckpointCallback(
-    save_freq=1000,
-    save_path=model_save_path,
-    name_prefix=algorithm.lower(),
-    save_replay_buffer=True,
-    save_vecnormalize=True,
-)
-
 env = gym.make(gym_env)
 env.env.min_goal_dist = goal_reached_threshold
 env.env.real_time_factor = real_time_factor
@@ -61,10 +57,25 @@ if model_path:
 else:
     model = create_model(algorithm, env)
 
+checkpoint_callback = CheckpointCallback(
+    save_freq=1000,
+    save_path=model_save_path,
+    name_prefix=algorithm.lower(),
+    save_replay_buffer=True,
+    save_vecnormalize=True,
+)
+
+stop_train_callback = StopTrainingOnNoModelImprovement(
+    max_no_improvement_evals=10, min_evals=10, verbose=1
+)
+eval_callback = EvalCallback(
+    env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1
+)
+
 model.learn(
     total_timesteps=timesteps,
     progress_bar=True,
-    callback=checkpoint_callback,
+    callback=[checkpoint_callback, eval_callback],
     tb_log_name=tb_log_name,
-    reset_num_timesteps=True,
+    reset_num_timesteps=False,
 )
