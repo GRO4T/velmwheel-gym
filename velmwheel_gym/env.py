@@ -10,7 +10,7 @@ from nav_msgs.msg import Path
 from rclpy.qos import qos_profile_system_default
 from std_srvs.srv import Empty
 
-from velmwheel_gym.constants import BASE_STEP_TIME, DEFAULT_QOS_PROFILE
+from velmwheel_gym.constants import BASE_STEP_TIME
 from velmwheel_gym.global_guidance_path import (
     POINT_REACHED_THRESHOLD,
     GlobalGuidancePath,
@@ -50,7 +50,6 @@ class VelmwheelEnv(gym.Env):
         self._min_goal_dist: float = 0
         self._real_time_factor: float = 1.0
         self._global_guidance_path = None
-        self._episode = 0  # TODO: use episode count from gym.Env
 
         self._simulation_init()
         self._robot = VelmwheelRobot()
@@ -73,12 +72,14 @@ class VelmwheelEnv(gym.Env):
 
         call_service(self._start_sim_srv)
 
-        self._reset_world_srv = self._node.create_client(Empty, RESET_WORLD_TOPIC)
+        self._reset_world_srv = create_ros_service_client(
+            self._node, Empty, RESET_WORLD_TOPIC
+        )
 
         self._navigation_goal_pub = self._node.create_publisher(
             PoseStamped,
             NAVIGATION_GOAL_TOPIC,
-            qos_profile=DEFAULT_QOS_PROFILE,
+            qos_profile=qos_profile_system_default,
         )
 
         self._navigation_plan_sub = self._node.create_subscription(
@@ -158,8 +159,7 @@ class VelmwheelEnv(gym.Env):
         return obs, reward, done, info
 
     def reset(self):
-        self._episode += 1
-        self._reset_simulation()
+        call_service(self._reset_world_srv)
         if not self.goal or not self.starting_position:
             self._start_position_and_goal_generator.generate_next()
         self._robot.reset(self.starting_position)
@@ -238,14 +238,6 @@ class VelmwheelEnv(gym.Env):
         )
 
         return global_guidance_following_reward + detour_penalty, False
-
-    def _reset_simulation(self):
-        # TODO: use wait_for_service from utils
-        while not self._reset_world_srv.wait_for_service(timeout_sec=1.0):
-            logger.debug(f"{RESET_WORLD_TOPIC} service not available, waiting again...")
-
-        reset_future = self._reset_world_srv.call_async(Empty.Request())
-        rclpy.spin_until_future_complete(self._node, reset_future)
 
     def _publish_goal(self):
         goal = PoseStamped()
