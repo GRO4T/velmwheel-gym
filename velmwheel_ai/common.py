@@ -97,7 +97,7 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
-    print(f"==== Policy network ====\n{model.policy}")
+    print(model.policy)
     return model
 
 
@@ -130,7 +130,7 @@ def load_model(
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
-    print(f"==== Policy network ====\n{model.policy}")
+    print(model.policy)
     return model
 
 

@@ -1,5 +1,6 @@
 import configparser
 import math
+import subprocess
 
 import gym
 
@@ -15,8 +16,8 @@ init_logging()
 # ---------------------------------------------------------------------------- #
 
 parser = bootstrap_argument_parser()
-parser.add_argument("--goal_x", type=float, default=-3.0, help="Goal x coordinate")
-parser.add_argument("--goal_y", type=float, default=-3.0, help="Goal y coordinate")
+parser.add_argument("--goal_x", type=float, help="Goal x coordinate")
+parser.add_argument("--goal_y", type=float, help="Goal y coordinate")
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -36,17 +37,16 @@ goal_y = float(param_reader.read("goal_y"))
 #                               Testing the model                              #
 # ---------------------------------------------------------------------------- #
 
+goal = [goal_x, goal_y]
+min_dist_to_goal = math.inf
+
 env = gym.make(gym_env)
 env.env.real_time_factor = real_time_factor
+env.env.goal = Point(*goal)
 
 model = load_model(algorithm, env, model_path, replay_buffer_path)
 
 obs = env.reset()
-
-goal = [goal_x, goal_y]
-min_dist_to_goal = math.inf
-
-env.env.goal = Point(*goal)
 
 while True:
     action, _states = model.predict(obs, deterministic=True)
@@ -69,6 +69,7 @@ while True:
         env.env._robot.move([0.0, 0.0])
         value = input("Next goal? (y/n): ")
         if value.lower() == "n":
+            subprocess.run("./kill_sim.sh", shell=True, check=True)
             break
         goal_x = float(input("Goal x: "))
         goal_y = float(input("Goal y: "))
