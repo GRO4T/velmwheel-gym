@@ -1,4 +1,3 @@
-import argparse
 import configparser
 
 import gym
@@ -30,7 +29,7 @@ parser.add_argument("--timesteps", type=int, help="Number of timesteps", require
 args = parser.parse_args()
 config = configparser.ConfigParser()
 config.read(["config.ini"])
-param_reader = ParameterReader(args, config)
+param_reader = ParameterReader("trainer", args, config)
 
 gym_env = param_reader.read("gym_env")
 algorithm = param_reader.read("algorithm")
@@ -75,7 +74,7 @@ eval_callback = EvalCallback(
 model.learn(
     total_timesteps=timesteps,
     progress_bar=True,
-    callback=[checkpoint_callback, eval_callback],
+    callback=checkpoint_callback,
     tb_log_name=tb_log_name,
     reset_num_timesteps=False,
 )

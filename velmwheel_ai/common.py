@@ -13,12 +13,22 @@ from stable_baselines3.common.noise import (
 
 
 class ParameterReader:
-    def __init__(self, args: argparse.Namespace, config: configparser.ConfigParser):
+    def __init__(
+        self,
+        default_section: str,
+        args: argparse.Namespace,
+        config: configparser.ConfigParser,
+    ):
+        self._default_section = default_section
         self._args = args
         self._config = config
 
     def read(self, name: str):
-        value = self._config.get("trainer", name) if self._config else self._args[name]
+        value = (
+            vars(self._args)[name]
+            if name in self._args and vars(self._args)[name] is not None
+            else self._config.get(self._default_section, name)
+        )
         print(f"{name}={value}")
         return value
 
@@ -47,7 +57,7 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
             action_noise = OrnsteinUhlenbeckActionNoise(
                 mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions)
             )
-            return DDPG(
+            model = DDPG(
                 "MlpPolicy",
                 env,
                 verbose=1,
@@ -60,7 +70,7 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
             action_noise = NormalActionNoise(
                 mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
             )
-            return TD3(
+            model = TD3(
                 "MlpPolicy",
                 env,
                 verbose=1,
@@ -69,7 +79,7 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
                 device="cuda",
             )
         case "PPO":
-            return PPO(
+            model = PPO(
                 "MlpPolicy",
                 env,
                 verbose=1,
@@ -77,7 +87,7 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
                 device="cuda",
             )
         case "SAC":
-            return SAC(
+            model = SAC(
                 "MlpPolicy",
                 env,
                 verbose=1,
@@ -86,6 +96,9 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
             )
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
+
+    print(f"==== Policy network ====\n{model.policy}")
+    return model
 
 
 def _load_replay_buffer(model: BaseAlgorithm, replay_buffer_path: str):
@@ -94,28 +107,31 @@ def _load_replay_buffer(model: BaseAlgorithm, replay_buffer_path: str):
 
 
 def load_model(
-    algorithm: str, env: gym.Env, model_path: str, replay_buffer_path: str
+    algorithm: str,
+    env: gym.Env,
+    model_path: str,
+    replay_buffer_path: str,
 ) -> BaseAlgorithm:
     match algorithm:
         case "DDPG":
             model = DDPG.load(model_path, env=env)
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
-            return model
         case "TD3":
             model = TD3.load(model_path, env=env)
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
-            return model
         case "PPO":
-            return PPO.load(model_path, env=env)
+            model = PPO.load(model_path, env=env)
         case "SAC":
             model = SAC.load(model_path, env=env)
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
-            return model
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
+
+    print(f"==== Policy network ====\n{model.policy}")
+    return model
 
 
 def bootstrap_argument_parser() -> argparse.ArgumentParser:
