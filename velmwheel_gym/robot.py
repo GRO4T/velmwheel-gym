@@ -34,7 +34,12 @@ class VelmwheelRobot:
         self._simulation_time: int = None
         self._real_time_factor: float = 1.0
 
-        # ROS related stuff
+        self._ros_init()
+        self.update()
+
+        logger.debug("VelmwheelRobot created")
+
+    def _ros_init(self):
         self._node = rclpy.create_node(self.__class__.__name__)
         # services
         self._laser_scan_matcher_set_pose_srv = create_ros_service_client(
@@ -78,8 +83,6 @@ class VelmwheelRobot:
             self._position_callback,
             qos_profile=qos_profile_system_default,
         )
-
-        logger.debug("VelmwheelRobot created")
 
     @property
     def position(self) -> Point:

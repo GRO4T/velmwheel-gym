@@ -26,6 +26,7 @@ def create_ros_service_client(
 
 
 def call_service(service_client: RosServiceClientWrapper) -> object:
+    wait_for_service(service_client.client, service_client.ros_topic)
     node, client, request, ros_topic = service_client
     logger.debug(f"Call {ros_topic} with {request=}")
     future = client.call_async(request)

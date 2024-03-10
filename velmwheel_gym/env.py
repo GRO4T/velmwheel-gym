@@ -50,7 +50,14 @@ class VelmwheelEnv(gym.Env):
         self._min_goal_dist: float = 0
         self._real_time_factor: float = 1.0
         self._global_guidance_path = None
+        self._episode = 0  # TODO: use episode count from gym.Env
 
+        self._simulation_init()
+        self._robot = VelmwheelRobot()
+
+        logger.debug("VelmwheelEnv created")
+
+    def _simulation_init(self):
         rclpy.init()
         self._node = rclpy.create_node(self.__class__.__name__)
 
@@ -81,12 +88,11 @@ class VelmwheelEnv(gym.Env):
             qos_profile=qos_profile_system_default,
         )
 
+    def _simulation_reinit(self):
+        self._node.destroy_node()
+        rclpy.shutdown()
+        self._simulation_init()
         self._robot = VelmwheelRobot()
-        self._robot.update()
-
-        self._episode = 0  # TODO: use episode count from gym.Env
-
-        logger.debug("VelmwheelEnv created")
 
     @property
     def goal(self) -> Point:
@@ -161,11 +167,12 @@ class VelmwheelEnv(gym.Env):
 
         self._global_guidance_path = None
 
-        time.sleep(1.0)
-
         while not self._wait_for_new_path(WAIT_FOR_NEW_PATH_TIMEOUT_SEC):
             logger.warning("Simulation in a bad state. Restarting the simulation.")
-            call_service(self._restart_sim_srv)
+            call_service(self._stop_sim_srv)
+            self._simulation_reinit()
+            self._robot.reset(self.starting_position)
+            self._robot.update()
 
         return self._observe()
 
