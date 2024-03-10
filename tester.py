@@ -37,6 +37,7 @@ goal_y = float(param_reader.read("goal_y"))
 #                               Testing the model                              #
 # ---------------------------------------------------------------------------- #
 
+starting_position = Point(0.0, 0.0)
 goal = [goal_x, goal_y]
 min_dist_to_goal = math.inf
 
@@ -74,5 +75,5 @@ while True:
         goal_x = float(input("Goal x: "))
         goal_y = float(input("Goal y: "))
         goal = [goal_x, goal_y]
-        env.env._goal_manager._current_goal = Point(*goal)
+        env.env._start_position_and_goal_generator.set(starting_position, Point(*goal))
         obs = env.reset()

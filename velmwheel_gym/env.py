@@ -15,8 +15,10 @@ from velmwheel_gym.global_guidance_path import (
     POINT_REACHED_THRESHOLD,
     GlobalGuidancePath,
 )
-from velmwheel_gym.goal_manager import GoalManager
 from velmwheel_gym.robot import VelmwheelRobot
+from velmwheel_gym.start_position_and_goal_generator import (
+    StartPositionAndGoalGenerator,
+)
 from velmwheel_gym.types import Point
 from velmwheel_gym.utils import call_service, create_ros_service_client
 
@@ -44,8 +46,7 @@ class VelmwheelEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(6,), dtype=np.float64
         )
-        self._starting_position = Point(1.0, 1.0)
-        self._goal_manager = GoalManager()
+        self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
         self._min_goal_dist: float = 0
         self._real_time_factor: float = 1.0
         self._global_guidance_path = None
@@ -90,11 +91,20 @@ class VelmwheelEnv(gym.Env):
     @property
     def goal(self) -> Point:
         """Robot's navigation goal."""
-        return self._goal_manager.current_goal
+        return self._start_position_and_goal_generator.goal
 
     @goal.setter
     def goal(self, point: Point):
-        self._goal_manager.current_goal = point
+        self._start_position_and_goal_generator.goal = point
+
+    @property
+    def starting_position(self) -> Point:
+        """Robot's starting position."""
+        return self._start_position_and_goal_generator.starting_position
+
+    @starting_position.setter
+    def starting_position(self, point: Point):
+        self._start_position_and_goal_generator.starting_position = point
 
     @property
     def min_goal_dist(self) -> float:
@@ -144,12 +154,12 @@ class VelmwheelEnv(gym.Env):
     def reset(self):
         self._episode += 1
         self._reset_simulation()
-        self._robot.reset(self._starting_position)
+        if not self.goal or not self.starting_position:
+            self._start_position_and_goal_generator.generate_next()
+        self._robot.reset(self.starting_position)
         self._robot.update()
 
         self._global_guidance_path = None
-        if not self.goal:
-            self._goal_manager.generate_next_goal()
 
         time.sleep(1.0)
 
@@ -205,8 +215,8 @@ class VelmwheelEnv(gym.Env):
 
         if dist_to_goal < self._min_goal_dist:
             logger.debug(f"SUCCESS: Robot reached goal at {self.goal=}")
-            self._goal_manager.register_goal_reached()
-            self._goal_manager.generate_next_goal()
+            self._start_position_and_goal_generator.register_goal_reached()
+            self._start_position_and_goal_generator.generate_next()
             return 5.0, True
 
         detour_penalty = 0
@@ -263,9 +273,9 @@ class VelmwheelEnv(gym.Env):
 
         self._analyze_path(points)
 
-        if points[0].dist(self._starting_position) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
+        if points[0].dist(self.starting_position) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
             logger.warning(
-                f"Path rejected: First point in the path is not close to the starting position ({self._starting_position}): {points[0]}"
+                f"Path rejected: First point in the path is not close to the starting position ({self.starting_position}): {points[0]}"
             )
             return
 
