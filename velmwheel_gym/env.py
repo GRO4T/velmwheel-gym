@@ -1,6 +1,5 @@
 import logging
 import math
-import random
 import time
 
 import gym
@@ -16,6 +15,7 @@ from velmwheel_gym.global_guidance_path import (
     POINT_REACHED_THRESHOLD,
     GlobalGuidancePath,
 )
+from velmwheel_gym.goal_manager import GoalManager
 from velmwheel_gym.robot import VelmwheelRobot
 from velmwheel_gym.types import Point
 from velmwheel_gym.utils import call_service, create_ros_service_client
@@ -44,7 +44,7 @@ class VelmwheelEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(6,), dtype=np.float64
         )
-        self._goal: Point = None
+        self._goal_manager = GoalManager()
         self._min_goal_dist: float = 0
         self._real_time_factor: float = 1.0
         self._global_guidance_path = None
@@ -89,11 +89,11 @@ class VelmwheelEnv(gym.Env):
     @property
     def goal(self) -> Point:
         """Robot's navigation goal."""
-        return self._goal
+        return self._goal_manager.current_goal
 
     @goal.setter
     def goal(self, point: Point):
-        self._goal = point
+        self._goal_manager.current_goal = point
 
     @property
     def min_goal_dist(self) -> float:
@@ -147,7 +147,8 @@ class VelmwheelEnv(gym.Env):
         self._robot.update()
 
         self._global_guidance_path = None
-        self._generate_next_goal()
+        if not self.goal:
+            self._goal_manager.generate_next_goal()
 
         time.sleep(1.0)
 
@@ -172,10 +173,10 @@ class VelmwheelEnv(gym.Env):
                 [
                     position.x,
                     position.y,
-                    self._goal.x,
-                    self._goal.y,
-                    self._goal.x,
-                    self._goal.y,
+                    self.goal.x,
+                    self.goal.y,
+                    self.goal.x,
+                    self.goal.y,
                 ]
             )
 
@@ -183,8 +184,8 @@ class VelmwheelEnv(gym.Env):
             [
                 position.x,
                 position.y,
-                self._goal.x,
-                self._goal.y,
+                self.goal.x,
+                self.goal.y,
                 self._global_guidance_path.points[0].x,
                 self._global_guidance_path.points[0].y,
             ]
@@ -192,7 +193,7 @@ class VelmwheelEnv(gym.Env):
 
     def _calculate_distance_to_goal(self, obs: np.array) -> float:
         pos_x, pos_y, *_ = obs
-        return math.dist(self._goal, (pos_x, pos_y))
+        return math.dist(self.goal, (pos_x, pos_y))
 
     def _calculate_reward(
         self, dist_to_goal: float, num_passed_points: int
@@ -202,7 +203,9 @@ class VelmwheelEnv(gym.Env):
             return -5.0, True
 
         if dist_to_goal < self._min_goal_dist:
-            logger.debug(f"SUCCESS: Robot reached goal at {self._goal=}")
+            logger.debug(f"SUCCESS: Robot reached goal at {self.goal=}")
+            self._goal_manager.register_goal_reached()
+            self._goal_manager.generate_next_goal()
             return 5.0, True
 
         detour_penalty = 0
@@ -212,7 +215,7 @@ class VelmwheelEnv(gym.Env):
             >= POINT_REACHED_THRESHOLD
         ):
             detour_penalty = -1.0 / self.spec.max_episode_steps
-        global_guidance_following_reward = 1.0 * (
+        global_guidance_following_reward = 2.0 * (
             num_passed_points / self._global_guidance_path.original_num_points
         )
 
@@ -225,16 +228,6 @@ class VelmwheelEnv(gym.Env):
 
         reset_future = self._reset_world_srv.call_async(Empty.Request())
         rclpy.spin_until_future_complete(self._node, reset_future)
-
-    def _generate_next_goal(self):
-        available_goals = [
-            Point(3.0, 3.0),
-            Point(3.0, -3.0),
-            Point(-3.0, 3.0),
-            Point(-3.0, -3.0),
-        ]
-        self.goal = random.SystemRandom().choice(available_goals)
-        logger.debug(f"{self.goal=}")
 
     def _publish_goal(self):
         goal = PoseStamped()
@@ -281,7 +274,7 @@ class VelmwheelEnv(gym.Env):
             )
             return
 
-        self._global_guidance_path = GlobalGuidancePath(points)
+        self._global_guidance_path = GlobalGuidancePath(self._robot.position, points)
 
     def _analyze_path(self, points: list[Point]):
         logger.debug(f"New path has {len(points)} points")

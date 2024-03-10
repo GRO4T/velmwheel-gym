@@ -5,13 +5,15 @@ from velmwheel_gym.types import Point
 logger = logging.getLogger(__name__)
 
 
-POINT_REACHED_THRESHOLD = 0.05  # meters
+POINT_REACHED_THRESHOLD = 0.5  # meters
 
 
 class GlobalGuidancePath:
-    def __init__(self, points: list[Point]):
-        self._original_num_points = len(points)
+    def __init__(self, robot_position: Point, points: list[Point]):
         self._points = points
+        # NOTE: we want to trim initial points that are already passed, so we don't reward inaction
+        self.update(robot_position)
+        self._original_num_points = len(points)
 
     @property
     def points(self) -> list[Point]:
