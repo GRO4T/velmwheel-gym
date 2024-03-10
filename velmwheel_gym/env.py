@@ -44,6 +44,7 @@ class VelmwheelEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(6,), dtype=np.float64
         )
+        self._starting_position = Point(1.0, 1.0)
         self._goal_manager = GoalManager()
         self._min_goal_dist: float = 0
         self._real_time_factor: float = 1.0
@@ -143,7 +144,7 @@ class VelmwheelEnv(gym.Env):
     def reset(self):
         self._episode += 1
         self._reset_simulation()
-        self._robot.reset()
+        self._robot.reset(self._starting_position)
         self._robot.update()
 
         self._global_guidance_path = None
@@ -262,9 +263,9 @@ class VelmwheelEnv(gym.Env):
 
         self._analyze_path(points)
 
-        if points[0].dist(Point(0, 0)) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
+        if points[0].dist(self._starting_position) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
             logger.warning(
-                f"Path rejected: First point in the path is not close to the (0, 0): {points[0]}"
+                f"Path rejected: First point in the path is not close to the starting position ({self._starting_position}): {points[0]}"
             )
             return
 

@@ -1,6 +1,7 @@
 import logging
 
 import rclpy
+from gazebo_msgs.srv import SetEntityState
 from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped, Twist
 from rclpy.qos import qos_profile_system_default
 from scan_tools_msgs.srv import SetPose
@@ -19,6 +20,7 @@ ODOM_LASER_POSE_TOPIC = "/velmwheel/odom/laser/pose"
 LASER_SCAN_MATCHER_SET_POSE_TOPIC = "/velmwheel/laser_scan_matcher/set_pose"
 NAVIGATION_INITIAL_POSE_TOPIC = "/initialpose"
 ENCODERS_SET_POSE_TOPIC = "/velmwheel/odom/encoders/set_pose"
+SET_ENTITY_STATE_TOPIC = "/set_entity_state"
 
 
 class VelmwheelRobot:
@@ -37,6 +39,9 @@ class VelmwheelRobot:
         # services
         self._laser_scan_matcher_set_pose_srv = create_ros_service_client(
             self._node, SetPose, LASER_SCAN_MATCHER_SET_POSE_TOPIC
+        )
+        self._set_entity_pose_srv = create_ros_service_client(
+            self._node, SetEntityState, SET_ENTITY_STATE_TOPIC
         )
         # publishers
         self._movement_pub = self._node.create_publisher(
@@ -100,12 +105,13 @@ class VelmwheelRobot:
     def real_time_factor(self, factor: float):
         self._real_time_factor = factor
 
-    def reset(self):
+    def reset(self, starting_position: Point):
         """Resets robot's state."""
         self.move([0.0, 0.0])
         self._is_collide = False
-        self._reset_laser_scan_matcher_pose()
-        self._reset_encoders_pose()
+        self._set_entity_pose(starting_position)
+        self._set_laser_scan_matcher_pose(starting_position)
+        self._set_encoders_pose(starting_position)
         self._position = None
 
     def update(self):
@@ -141,21 +147,34 @@ class VelmwheelRobot:
         self._position_tstamp_sec = message.header.stamp.sec
         self._position_tstamp_nanosec = message.header.stamp.nanosec
 
-    def _publish_nav_initial_pose(self):
+    def _publish_navigation_initial_pose(self):
         initial_pose = PoseWithCovarianceStamped()
         initial_pose.header.frame_id = "map"
         initial_pose.pose.pose.position.x = self._position.x
         initial_pose.pose.pose.position.y = self._position.y
         self._nav_initial_position_pub.publish(initial_pose)
 
-    def _reset_laser_scan_matcher_pose(self):
-        """Resets pose estimation of laser-based odometry."""
+    def _set_entity_pose(self, position: Point):
+        """Sets robot's position in the Gazebo simulation."""
+        req = self._set_entity_pose_srv.request
+        req.state.name = "velmwheel"
+        req.state.pose.position.x = position.x
+        req.state.pose.position.y = position.y
+        req.state.pose.position.z = 0.0
+        req.state.pose.orientation.x = 0.0
+        req.state.pose.orientation.y = 0.0
+        req.state.pose.orientation.z = 0.0
+        req.state.pose.orientation.w = 1.0
+        call_service(self._set_entity_pose_srv)
+
+    def _set_laser_scan_matcher_pose(self, position: Point):
+        """Sets pose estimation of laser-based odometry."""
         logger.debug("Reset laser scan matcher pose")
         req = self._laser_scan_matcher_set_pose_srv.request
         req.pose.header.frame_id = "odom"
         req.pose.header.stamp.sec = self._simulation_time + 1
-        req.pose.pose.position.x = 0.0
-        req.pose.pose.position.y = 0.0
+        req.pose.pose.position.x = position.x
+        req.pose.pose.position.y = position.y
         req.pose.pose.position.z = 0.0
         req.pose.pose.orientation.x = 0.0
         req.pose.pose.orientation.y = 0.0
@@ -163,10 +182,11 @@ class VelmwheelRobot:
         req.pose.pose.orientation.w = 1.0
         call_service(self._laser_scan_matcher_set_pose_srv)
 
-    def _reset_encoders_pose(self):
+    def _set_encoders_pose(self, position: Point):
+        """Sets pose estimation of wheel encoders."""
         logger.debug("Reset encoders pose")
         pose = Pose()
-        pose.position.x = 0.0
-        pose.position.y = 0.0
+        pose.position.x = position.x
+        pose.position.y = position.y
         pose.position.z = 0.0
         self._encoders_set_pose_pub.publish(pose)
