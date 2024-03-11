@@ -43,11 +43,19 @@ def get_model_save_path_and_tb_log_name(
         )
 
     model_save_dir = f"./models/velmwheel_v1/{algorithm.lower()}"
-    run_id = 1
-    for _ in os.listdir(model_save_dir):
-        run_id += 1
+    max_run_id = 1
+    for filename in os.listdir(model_save_dir):
+        try:
+            run_id = int(filename)
+            if run_id > max_run_id:
+                max_run_id = run_id
+        except ValueError:
+            continue
 
-    return os.path.join(model_save_dir, str(run_id)), f"{algorithm}_{run_id}"
+    return (
+        os.path.join(model_save_dir, str(max_run_id + 1)),
+        f"{algorithm}_{max_run_id + 1}",
+    )
 
 
 def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
