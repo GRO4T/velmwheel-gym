@@ -1,4 +1,4 @@
-name: Velmwheel Gym CI
+name: Pytest
 
 on:
   push:
