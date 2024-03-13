@@ -25,6 +25,12 @@ register(
 )
 
 register(
+    id="Velmwheel250-v1",
+    entry_point="velmwheel_gym.env:VelmwheelEnv",
+    max_episode_steps=250,
+)
+
+register(
     id="Velmwheel500-v1",
     entry_point="velmwheel_gym.env:VelmwheelEnv",
     max_episode_steps=500,

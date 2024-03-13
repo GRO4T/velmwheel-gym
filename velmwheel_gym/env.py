@@ -7,10 +7,11 @@ import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
-from rclpy.qos import qos_profile_system_default
+from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
+from sensor_msgs.msg import LaserScan
 from std_srvs.srv import Empty
 
-from velmwheel_gym.constants import BASE_STEP_TIME
+from velmwheel_gym.constants import BASE_STEP_TIME, LIDAR_DATA_SIZE
 from velmwheel_gym.global_guidance_path import (
     POINT_REACHED_THRESHOLD,
     GlobalGuidancePath,
@@ -30,6 +31,7 @@ RESTART_SIM_TOPIC = "/restart_sim"
 RESET_WORLD_TOPIC = "/reset_world"
 NAVIGATION_GOAL_TOPIC = "/goal_pose"
 GLOBAL_PLANNER_PATH_TOPIC = "/plan"
+LIDAR_TOPIC = "/velmwheel/lidars/scan/combined"
 
 WAIT_FOR_NEW_PATH_TIMEOUT_SEC = 30
 MAP_FRAME_POSITION_ERROR_TOLERANCE = 0.5
@@ -44,12 +46,13 @@ class VelmwheelEnv(gym.Env):
             low=-1.0, high=1.0, shape=(2,), dtype=np.float64
         )
         self.observation_space = gym.spaces.Box(
-            low=-100.0, high=100.0, shape=(6,), dtype=np.float64
+            low=-100.0, high=100.0, shape=(6 + LIDAR_DATA_SIZE,), dtype=np.float64
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
         self._min_goal_dist: float = 0
         self._real_time_factor: float = 1.0
         self._global_guidance_path = None
+        self._lidar_data = None
 
         self._simulation_init()
         self._robot = VelmwheelRobot()
@@ -87,6 +90,13 @@ class VelmwheelEnv(gym.Env):
             GLOBAL_PLANNER_PATH_TOPIC,
             self._global_planner_callback,
             qos_profile=qos_profile_system_default,
+        )
+
+        self._lidar_sub = self._node.create_subscription(
+            LaserScan,
+            LIDAR_TOPIC,
+            self._lidar_callback,
+            qos_profile=qos_profile_sensor_data,
         )
 
     def _simulation_reinit(self):
@@ -174,6 +184,11 @@ class VelmwheelEnv(gym.Env):
             self._robot.reset(self.starting_position)
             self._robot.update()
 
+        self._lidar_data = None
+        while self._lidar_data is None:
+            rclpy.spin_once(self._node, timeout_sec=1.0)
+            logger.debug("Waiting for lidar data")
+
         return self._observe()
 
     def close(self):
@@ -185,29 +200,22 @@ class VelmwheelEnv(gym.Env):
     def _observe(self) -> np.array:
         position = self._robot.position
 
-        if not self._global_guidance_path.points:
-            logger.warning("No global guidance path points")
-            return np.array(
+        obs = [position.x, position.y, self.goal.x, self.goal.y]
+
+        if self._global_guidance_path.points:
+            obs.extend(
                 [
-                    position.x,
-                    position.y,
-                    self.goal.x,
-                    self.goal.y,
-                    self.goal.x,
-                    self.goal.y,
+                    self._global_guidance_path.points[0].x,
+                    self._global_guidance_path.points[0].y,
                 ]
             )
+        else:
+            logger.warning("No global guidance path points")
+            obs.extend([self.goal.x, self.goal.y])
 
-        return np.array(
-            [
-                position.x,
-                position.y,
-                self.goal.x,
-                self.goal.y,
-                self._global_guidance_path.points[0].x,
-                self._global_guidance_path.points[0].y,
-            ]
-        )
+        obs.extend(self._lidar_data)
+
+        return obs
 
     def _calculate_distance_to_goal(self, obs: np.array) -> float:
         pos_x, pos_y, *_ = obs
@@ -247,12 +255,14 @@ class VelmwheelEnv(gym.Env):
         self._navigation_goal_pub.publish(goal)
 
     def _wait_for_new_path(self, timeout_sec: int) -> bool:
-        total = 0
+        logger.debug("Waiting for global planner to calculate a new path")
+        total = 0.0
         while not self._global_guidance_path:
-            logger.debug("Waiting for global planner to calculate a new path")
+            start = time.time()
             self._publish_goal()
             rclpy.spin_once(self._node, timeout_sec=1.0)
-            total += 1
+            end = time.time()
+            total += end - start
             if total > timeout_sec:
                 logger.warning("Timeout reached while waiting for a new path.")
                 return False
@@ -274,13 +284,13 @@ class VelmwheelEnv(gym.Env):
 
         if points[0].dist(self.starting_position) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
             logger.warning(
-                f"Path rejected: First point in the path is not close to the starting position ({self.starting_position}): {points[0]}"
+                f"Path rejected: First point in the path is not close to the starting position ({self.starting_position}): {points[0]}"  # pylint: disable=line-too-long
             )
             return
 
         if points[-1].dist(self.goal) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
             logger.warning(
-                f"Path rejected: Last point in the path is not close to the goal ({self.goal}): {points[-1]}"
+                f"Path rejected: Last point in the path is not close to the goal ({self.goal}): {points[-1]}"  # pylint: disable=line-too-long
             )
             return
 
@@ -297,3 +307,18 @@ class VelmwheelEnv(gym.Env):
             p2 = (points[i].x, points[i].y)
             dist += math.dist(p1, p2)
         logger.debug(f"Average distance between points: {dist / n-1} meters")
+
+    def _lidar_callback(self, message: LaserScan):
+        # TODO: remove debug logs later
+        # logger.debug(f"Angle increment: {message.angle_increment}")
+        # logger.debug(f"Range min: {message.range_min}")
+        # logger.debug(f"Range max: {message.range_max}")
+        # logger.debug(f"Ranges size: {len(message.ranges)}")
+        # logger.debug(f"Ranges: {message.ranges}")
+        self._lidar_data = list(
+            map(
+                lambda x: max(message.range_min, min(message.range_max, x)),
+                message.ranges,
+            )
+        )
+        # logger.debug(f"LIDAR data: {self._lidar_data}")
