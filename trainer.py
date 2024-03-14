@@ -14,10 +14,8 @@ from velmwheel_ai.common import (
     get_model_save_path_and_tb_log_name,
     load_model,
 )
-from velmwheel_gym.env import VelmwheelEnv
+from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
 from velmwheel_gym.logger import init_logging
-
-init_logging()
 
 # ---------------------------------------------------------------------------- #
 #                                 Configuration                                #
@@ -31,6 +29,8 @@ config = configparser.ConfigParser()
 config.read(["config.ini"])
 param_reader = ParameterReader("trainer", args, config)
 
+# pylint: disable=duplicate-code
+log_level = param_reader.read("log_level")
 gym_env = param_reader.read("gym_env")
 algorithm = param_reader.read("algorithm")
 model_path = param_reader.read("model")
@@ -38,6 +38,8 @@ replay_buffer_path = param_reader.read("replay_buffer")
 timesteps = int(param_reader.read("timesteps"))
 goal_reached_threshold = float(param_reader.read("goal_reached_threshold"))
 real_time_factor = float(param_reader.read("real_time_factor"))
+
+init_logging(log_level)
 
 # ---------------------------------------------------------------------------- #
 #                              Training the model                              #

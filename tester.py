@@ -5,18 +5,16 @@ import subprocess
 import gym
 
 from velmwheel_ai.common import ParameterReader, bootstrap_argument_parser, load_model
-from velmwheel_gym.env import VelmwheelEnv
+from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
 from velmwheel_gym.logger import init_logging
 from velmwheel_gym.types import Point
-
-init_logging()
 
 # ---------------------------------------------------------------------------- #
 #                                 Configuration                                #
 # ---------------------------------------------------------------------------- #
 
 parser = bootstrap_argument_parser()
-parser.add_argument("--goal_x", type=float, help="Goal x coordinate")
+parser.add_argument("--goal_x", type=float, help="Goal >x coordinate")
 parser.add_argument("--goal_y", type=float, help="Goal y coordinate")
 
 args = parser.parse_args()
@@ -24,6 +22,8 @@ config = configparser.ConfigParser()
 config.read(["config.ini"])
 param_reader = ParameterReader("tester", args, config)
 
+# pylint: disable=duplicate-code
+log_level = param_reader.read("log_level")
 gym_env = param_reader.read("gym_env")
 algorithm = param_reader.read("algorithm")
 model_path = param_reader.read("model")
@@ -33,13 +33,15 @@ real_time_factor = float(param_reader.read("real_time_factor"))
 goal_x = float(param_reader.read("goal_x"))
 goal_y = float(param_reader.read("goal_y"))
 
+init_logging(log_level)
+
 # ---------------------------------------------------------------------------- #
 #                               Testing the model                              #
 # ---------------------------------------------------------------------------- #
 
 starting_position = Point(0.0, 0.0)
 goal = [goal_x, goal_y]
-min_dist_to_goal = math.inf
+min_dist_to_goal = math.inf  # pylint: disable=invalid-name
 
 env = gym.make(gym_env)
 env.env.real_time_factor = real_time_factor
@@ -67,7 +69,7 @@ while True:
         min_dist_to_goal = dist_to_goal
 
     if dist_to_goal < goal_reached_threshold:
-        env.env._robot.move([0.0, 0.0])
+        env.env._robot.move([0.0, 0.0])  # pylint: disable=protected-access
         value = input("Next goal? (y/n): ")
         if value.lower() == "n":
             subprocess.run("./kill_sim.sh", shell=True, check=True)
@@ -75,5 +77,6 @@ while True:
         goal_x = float(input("Goal x: "))
         goal_y = float(input("Goal y: "))
         goal = [goal_x, goal_y]
+        # pylint: disable=protected-access
         env.env._start_position_and_goal_generator.set(starting_position, Point(*goal))
         obs = env.reset()
