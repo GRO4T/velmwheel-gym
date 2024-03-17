@@ -5,6 +5,7 @@
 **/install
 **/build
 **/log
+**/logs
 *.log
 **/logs/tensorboard/**
 **/models/**
