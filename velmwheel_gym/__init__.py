@@ -35,3 +35,9 @@ register(
     entry_point="velmwheel_gym.env:VelmwheelEnv",
     max_episode_steps=500,
 )
+
+register(
+    id="Velmwheel1000-v1",
+    entry_point="velmwheel_gym.env:VelmwheelEnv",
+    max_episode_steps=1000,
+)

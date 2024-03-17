@@ -1,10 +1,13 @@
 import logging
+import time
+from typing import Optional
 
 import rclpy
 from gazebo_msgs.srv import SetEntityState
 from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped, Twist
-from rclpy.qos import qos_profile_system_default
+from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
 from scan_tools_msgs.srv import SetPose
+from sensor_msgs.msg import LaserScan
 from velmwheel_gazebo_msgs.msg import ContactState
 
 from velmwheel_gym.constants import BASE_STEP_TIME
@@ -21,21 +24,26 @@ LASER_SCAN_MATCHER_SET_POSE_TOPIC = "/velmwheel/laser_scan_matcher/set_pose"
 NAVIGATION_INITIAL_POSE_TOPIC = "/initialpose"
 ENCODERS_SET_POSE_TOPIC = "/velmwheel/odom/encoders/set_pose"
 SET_ENTITY_STATE_TOPIC = "/set_entity_state"
+LIDAR_TOPIC = "/velmwheel/lidars/scan/combined"
+
+STALE_MEASUREMENT_TIMEOUT_SEC = 5
+STALE_MEASUREMENT_RECOVERY_TIMEOUT_SEC = 10
 
 
 class VelmwheelRobot:
     def __init__(self):
         logger.debug("Creating VelmwheelRobot")
 
-        self._is_collide = False
-        self._position: Point = None
-        self._position_tstamp_sec: int = None
-        self._position_tstamp_nanosec: int = None
-        self._simulation_time: int = None
+        self._is_collide: bool = False
+        self._position: Optional[Point] = None
+        self._position_tstamp: float = 0.0
+        self._lidar_data: Optional[list[float]] = None
+        self._lidar_tstamp: float = 0.0
+        self._simulation_time: Optional[int] = None
         self._real_time_factor: float = 1.0
+        self._ignore_collisions_until: float = 0.0
 
         self._ros_init()
-        self.update()
 
         logger.debug("VelmwheelRobot created")
 
@@ -83,6 +91,12 @@ class VelmwheelRobot:
             self._position_callback,
             qos_profile=qos_profile_system_default,
         )
+        self._lidar_sub = self._node.create_subscription(
+            LaserScan,
+            LIDAR_TOPIC,
+            self._lidar_callback,
+            qos_profile=qos_profile_sensor_data,
+        )
 
     @property
     def position(self) -> Point:
@@ -90,9 +104,27 @@ class VelmwheelRobot:
         return self._position
 
     @property
-    def position_tstamp(self) -> str:
+    def position_tstamp(self) -> float:
         """Timestamp of the last received position."""
-        return f"{self._position_tstamp_sec}.{self._position_tstamp_nanosec}"
+        return self._position_tstamp
+
+    @position_tstamp.setter
+    def position_tstamp(self, value: float):
+        self._position_tstamp = value
+
+    @property
+    def lidar_data(self):
+        """LIDAR data."""
+        return self._lidar_data
+
+    @property
+    def lidar_tstamp(self) -> float:
+        """Timestamp of the last received LIDAR data."""
+        return self._lidar_tstamp
+
+    @lidar_tstamp.setter
+    def lidar_tstamp(self, value: float):
+        self._lidar_tstamp = value
 
     @property
     def is_collide(self) -> bool:
@@ -110,22 +142,36 @@ class VelmwheelRobot:
 
     def reset(self, starting_position: Point):
         """Resets robot's state."""
-        self.move([0.0, 0.0])
+        self.stop()
+        self._ignore_collisions_until = time.time() + 1
         self._is_collide = False
+        self._position = None
+        self._lidar_data = None
+
+        while self._simulation_time is None:
+            rclpy.spin_once(self._node, timeout_sec=1.0)
+
         self._set_entity_pose(starting_position)
         self._set_laser_scan_matcher_pose(starting_position)
         self._set_encoders_pose(starting_position)
-        self._position = None
+
+        while self._position is None or self._lidar_data is None:
+            rclpy.spin_once(self._node, timeout_sec=1.0)
 
     def update(self):
         """Updates robot's state measurements."""
-        # NOTE: 50% of step time (adjusted for real time factor)
-        # can be spent waiting for environment measurements
-        rclpy.spin_once(
-            self._node, timeout_sec=0.5 * BASE_STEP_TIME / self.real_time_factor
-        )
-        while self._position is None or self._simulation_time is None:
-            rclpy.spin_once(self._node)
+        rclpy.spin_once(self._node, timeout_sec=BASE_STEP_TIME / self.real_time_factor)
+
+        current_time = time.time()
+        if (
+            current_time - self._position_tstamp > STALE_MEASUREMENT_TIMEOUT_SEC
+            or current_time - self._lidar_tstamp > STALE_MEASUREMENT_TIMEOUT_SEC
+        ):
+            logger.warning(
+                f"Stale measurements {current_time=} {self._position_tstamp=} {self._lidar_tstamp=}."
+            )
+            return self._stale_measurement_recovery()
+        return True
 
     def move(self, action):
         """Sends movement controls to the robot."""
@@ -136,8 +182,32 @@ class VelmwheelRobot:
 
         self._movement_pub.publish(motion_cmd)
 
+    def stop(self):
+        """Stops robot's movement."""
+        self.move([0.0, 0.0])
+
+    def _stale_measurement_recovery(self):
+        logger.warning("Trying to recover from stale measurements")
+        self.stop()
+        start = time.time()
+        self._position = None
+        self._lidar_data = None
+        self._simulation_time = None
+
+        while (
+            self._position is None
+            or self._lidar_data is None
+            or self._simulation_time is None
+        ):
+            rclpy.spin_once(self._node, timeout_sec=1.0)
+            if time.time() - start > STALE_MEASUREMENT_RECOVERY_TIMEOUT_SEC:
+                logger.error("Failed to recover from stale measurements")
+                return False
+        return True
+
     def _collision_callback(self, _):
-        self._is_collide = True
+        if time.time() > self._ignore_collisions_until:
+            self._is_collide = True
 
     def _odom_laser_pose_callback(self, message: PoseStamped):
         self._simulation_time = message.header.stamp.sec
@@ -147,8 +217,16 @@ class VelmwheelRobot:
             logger.debug(f"Position after reset: {message.pose.position}")
         p = message.pose.position
         self._position = Point(x=p.x, y=p.y)
-        self._position_tstamp_sec = message.header.stamp.sec
-        self._position_tstamp_nanosec = message.header.stamp.nanosec
+        self._position_tstamp = time.time()
+
+    def _lidar_callback(self, message: LaserScan):
+        self._lidar_data = list(
+            map(
+                lambda x: max(message.range_min, min(message.range_max, x)),
+                message.ranges,
+            )
+        )
+        self._lidar_tstamp = time.time()
 
     def _publish_navigation_initial_pose(self):
         initial_pose = PoseWithCovarianceStamped()

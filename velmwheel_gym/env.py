@@ -1,14 +1,14 @@
 import logging
 import math
 import time
+from copy import deepcopy
 
 import gym
 import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
-from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
-from sensor_msgs.msg import LaserScan
+from rclpy.qos import qos_profile_system_default
 from std_srvs.srv import Empty
 
 from velmwheel_gym.constants import BASE_STEP_TIME, LIDAR_DATA_SIZE
@@ -31,10 +31,14 @@ RESTART_SIM_TOPIC = "/restart_sim"
 RESET_WORLD_TOPIC = "/reset_world"
 NAVIGATION_GOAL_TOPIC = "/goal_pose"
 GLOBAL_PLANNER_PATH_TOPIC = "/plan"
-LIDAR_TOPIC = "/velmwheel/lidars/scan/combined"
 
-WAIT_FOR_NEW_PATH_TIMEOUT_SEC = 30
+WAIT_FOR_NEW_PATH_TIMEOUT_SEC = 15
 MAP_FRAME_POSITION_ERROR_TOLERANCE = 0.5
+
+COLLISION_PENALTY = -5.0
+DETOUR_PENALTY = -1.0
+SUCCESS_REWARD = 5.0
+PATH_FOLLOWING_REWARD = 5.0
 
 
 class VelmwheelEnv(gym.Env):
@@ -52,7 +56,11 @@ class VelmwheelEnv(gym.Env):
         self._min_goal_dist: float = 0
         self._real_time_factor: float = 1.0
         self._global_guidance_path = None
-        self._lidar_data = None
+        self._global_guidance_path_cache: dict[
+            tuple[Point, Point], GlobalGuidancePath
+        ] = {}
+        self._use_cache = False
+        self._steps = 0
 
         self._simulation_init()
         self._robot = VelmwheelRobot()
@@ -90,13 +98,6 @@ class VelmwheelEnv(gym.Env):
             GLOBAL_PLANNER_PATH_TOPIC,
             self._global_planner_callback,
             qos_profile=qos_profile_system_default,
-        )
-
-        self._lidar_sub = self._node.create_subscription(
-            LaserScan,
-            LIDAR_TOPIC,
-            self._lidar_callback,
-            qos_profile=qos_profile_sensor_data,
         )
 
     def _simulation_reinit(self):
@@ -143,15 +144,16 @@ class VelmwheelEnv(gym.Env):
         self._robot.real_time_factor = factor
 
     def step(self, action):
+        self._steps += 1
         step_time = BASE_STEP_TIME / self.real_time_factor
         start = time.time()
 
-        # NOTE: 50% of step time (adjusted for real time factor)
-        # can be spent waiting for environment measurements
-        rclpy.spin_once(self._node, timeout_sec=0.5 * step_time)
-
         self._robot.move(action)
-        self._robot.update()
+        if not self._robot.update():
+            logger.warning("Robot update failed. Restarting the simulation.")
+            call_service(self._stop_sim_srv)
+            self._simulation_reinit()
+            return None, 0, True, {}
 
         obs = self._observe()
 
@@ -161,41 +163,64 @@ class VelmwheelEnv(gym.Env):
         reward, done = self._calculate_reward(dist_to_goal, num_passed_points)
         info = {}
 
+        logger.trace(
+            f"{reward=} {dist_to_goal=} {self.goal=} {self._robot.position=} current_time={time.time()} {self._robot.position_tstamp=} {self._robot.lidar_tstamp=}"
+        )
+
         end = time.time()
         elapsed = end - start
         if elapsed < step_time:
             time.sleep(step_time - elapsed)
+        else:
+            logger.warning(f"Step time ({step_time}) exceeded: {elapsed}")
 
         return obs, reward, done, info
 
     def reset(self):
+        self._steps = 0
         call_service(self._reset_world_srv)
         if not self.goal or not self.starting_position:
             self._start_position_and_goal_generator.generate_next()
         self._robot.reset(self.starting_position)
-        self._robot.update()
 
-        self._global_guidance_path = None
+        if (
+            self._use_cache
+            and (self.starting_position, self.goal) in self._global_guidance_path_cache
+        ):
+            self._get_global_guidance_path_from_cache()
+        else:
+            self._get_global_guidance_path_from_ros_navigation_stack()
+            self._use_cache = True
 
-        while not self._wait_for_new_path(WAIT_FOR_NEW_PATH_TIMEOUT_SEC):
-            logger.warning("Simulation in a bad state. Restarting the simulation.")
-            call_service(self._stop_sim_srv)
-            self._simulation_reinit()
-            self._robot.reset(self.starting_position)
-            self._robot.update()
-
-        self._lidar_data = None
-        while self._lidar_data is None:
-            rclpy.spin_once(self._node, timeout_sec=1.0)
-            logger.debug("Waiting for lidar data")
+        self._robot.position_tstamp = time.time()
+        self._robot.lidar_tstamp = time.time()
 
         return self._observe()
 
     def close(self):
         logger.info("Closing " + self.__class__.__name__ + " environment.")
-        self._robot.move([0.0, 0.0])
+        self._robot.stop()
         self._node.destroy_node()
         rclpy.shutdown()
+
+    def _get_global_guidance_path_from_cache(self):
+        logger.debug(
+            f"Using cached global guidance path from {self.starting_position} to {self.goal}"
+        )
+        self._global_guidance_path = self._global_guidance_path_cache[
+            (self.starting_position, self.goal)
+        ]
+
+    def _get_global_guidance_path_from_ros_navigation_stack(self):
+        logger.debug(
+            f"Waiting for the global guidance path from {self.starting_position} to {self.goal} from the ROS navigation stack"
+        )
+        self._global_guidance_path = None
+        while not self._wait_for_new_path(WAIT_FOR_NEW_PATH_TIMEOUT_SEC):
+            logger.warning("Simulation in a bad state. Restarting the simulation.")
+            call_service(self._stop_sim_srv)
+            self._simulation_reinit()
+            self._robot.reset(self.starting_position)
 
     def _observe(self) -> np.array:
         position = self._robot.position
@@ -213,7 +238,7 @@ class VelmwheelEnv(gym.Env):
             logger.warning("No global guidance path points")
             obs.extend([self.goal.x, self.goal.y])
 
-        obs.extend(self._lidar_data)
+        obs.extend(self._robot.lidar_data)
 
         return obs
 
@@ -226,26 +251,53 @@ class VelmwheelEnv(gym.Env):
     ) -> tuple[float, bool]:
         if self._robot.is_collide:
             logger.debug("FAILURE: Robot collided with an obstacle")
-            return -5.0, True
+            # After collision, we should use the navigation stack to get a new path,
+            # so we will be able to detect if collision has broken odom -> map frame transformation.
+            self._use_cache = False
+            return self._calculate_collision_penalty(), True
 
-        if dist_to_goal < self._min_goal_dist:
+        if self._is_goal_reached(dist_to_goal):
             logger.debug(f"SUCCESS: Robot reached goal at {self.goal=}")
             self._start_position_and_goal_generator.register_goal_reached()
             self._start_position_and_goal_generator.generate_next()
-            return 5.0, True
+            return SUCCESS_REWARD, True
 
-        detour_penalty = 0
-        if (
-            self._global_guidance_path.points
-            and self._global_guidance_path.points[0].dist(self._robot.position)
+        if num_passed_points > 0:
+            return (
+                self._calculate_global_guidance_following_reward(num_passed_points),
+                False,
+            )
+
+        if self._is_detoured_from_global_guidance_path():
+            return DETOUR_PENALTY / self.spec.max_episode_steps, False
+
+        return 0.0, False
+
+    def _calculate_collision_penalty(self) -> float:
+        remaining_detour_penalty = (
+            (self.spec.max_episode_steps - self._steps)
+            * DETOUR_PENALTY
+            / self.spec.max_episode_steps
+        )
+        return COLLISION_PENALTY + remaining_detour_penalty
+
+    def _is_goal_reached(self, dist_to_goal: float) -> bool:
+        return dist_to_goal < self._min_goal_dist
+
+    def _is_detoured_from_global_guidance_path(self) -> bool:
+        if not self._global_guidance_path.points:
+            return False
+        return (
+            self._global_guidance_path.points[0].dist(self._robot.position)
             >= POINT_REACHED_THRESHOLD
-        ):
-            detour_penalty = -1.0 / self.spec.max_episode_steps
-        global_guidance_following_reward = 2.0 * (
-            num_passed_points / self._global_guidance_path.original_num_points
         )
 
-        return global_guidance_following_reward + detour_penalty, False
+    def _calculate_global_guidance_following_reward(
+        self, num_passed_points: int
+    ) -> float:
+        return PATH_FOLLOWING_REWARD * (
+            num_passed_points / self._global_guidance_path.original_num_points
+        )
 
     def _publish_goal(self):
         goal = PoseStamped()
@@ -255,7 +307,6 @@ class VelmwheelEnv(gym.Env):
         self._navigation_goal_pub.publish(goal)
 
     def _wait_for_new_path(self, timeout_sec: int) -> bool:
-        logger.debug("Waiting for global planner to calculate a new path")
         total = 0.0
         while not self._global_guidance_path:
             start = time.time()
@@ -284,7 +335,7 @@ class VelmwheelEnv(gym.Env):
 
         if points[0].dist(self.starting_position) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
             logger.warning(
-                f"Path rejected: First point in the path is not close to the starting position ({self.starting_position}): {points[0]}"  # pylint: disable=line-too-long
+                f"Path rejected: First point in the path is not close to the starting position ({self.starting_position}): {points[0]}"
             )
             return
 
@@ -295,6 +346,10 @@ class VelmwheelEnv(gym.Env):
             return
 
         self._global_guidance_path = GlobalGuidancePath(self._robot.position, points)
+        if (self.starting_position, self.goal) not in self._global_guidance_path_cache:
+            self._global_guidance_path_cache[
+                (self.starting_position, self.goal)
+            ] = deepcopy(self._global_guidance_path)
 
     def _analyze_path(self, points: list[Point]):
         logger.debug(f"New path has {len(points)} points")
@@ -307,18 +362,3 @@ class VelmwheelEnv(gym.Env):
             p2 = (points[i].x, points[i].y)
             dist += math.dist(p1, p2)
         logger.debug(f"Average distance between points: {dist / n-1} meters")
-
-    def _lidar_callback(self, message: LaserScan):
-        # TODO: remove debug logs later
-        # logger.debug(f"Angle increment: {message.angle_increment}")
-        # logger.debug(f"Range min: {message.range_min}")
-        # logger.debug(f"Range max: {message.range_max}")
-        # logger.debug(f"Ranges size: {len(message.ranges)}")
-        # logger.debug(f"Ranges: {message.ranges}")
-        self._lidar_data = list(
-            map(
-                lambda x: max(message.range_min, min(message.range_max, x)),
-                message.ranges,
-            )
-        )
-        # logger.debug(f"LIDAR data: {self._lidar_data}")
