@@ -1,4 +1,6 @@
 import logging
+import os
+import pickle
 import random
 
 from velmwheel_gym.types import Point
@@ -22,6 +24,13 @@ class StartPositionAndGoalGenerator:
         self._idx = None
         self._combinations = [(x, y) for x in POINTS for y in POINTS if x != y]
         self._stats = [0] * len(self._combinations)
+
+        if os.path.exists("state/stats.pkl"):
+            with open("state/stats.pkl", "rb") as f:
+                self._stats = pickle.load(f)
+            logger.debug("Loaded stats")
+            for i, (x, y) in enumerate(self._combinations):
+                logger.debug(f"{x} -> {y}: {self._stats[i]}")
 
     def set(self, starting_position: Point, goal: Point):
         self._starting_position = starting_position
@@ -48,6 +57,8 @@ class StartPositionAndGoalGenerator:
 
     def register_goal_reached(self):
         self._stats[self._idx] += 1
+        with open("state/stats.pkl", "wb") as f:
+            pickle.dump(self._stats, f)
 
     def generate_next(self):
         inverse_stats = [1 / (1 + x) for x in self._stats]
