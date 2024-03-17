@@ -53,14 +53,15 @@ class VelmwheelEnv(gym.Env):
             low=-100.0, high=100.0, shape=(6 + LIDAR_DATA_SIZE,), dtype=np.float64
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
-        self._min_goal_dist: float = 0
+        self._min_goal_dist: float = 0.0
         self._real_time_factor: float = 1.0
-        self._global_guidance_path = None
+        self._global_guidance_path: GlobalGuidancePath = None
         self._global_guidance_path_cache: dict[
             tuple[Point, Point], GlobalGuidancePath
         ] = {}
-        self._use_cache = False
-        self._steps = 0
+        self._use_cache: bool = False
+        self._steps: int = 0
+        self._episode_reward: float = 0.0
 
         self._simulation_init()
         self._robot = VelmwheelRobot()
@@ -162,9 +163,10 @@ class VelmwheelEnv(gym.Env):
 
         reward, done = self._calculate_reward(dist_to_goal, num_passed_points)
         info = {}
+        self._episode_reward += reward
 
         logger.trace(
-            f"{reward=} {dist_to_goal=} {self.goal=} {self._robot.position=} current_time={time.time()} {self._robot.position_tstamp=} {self._robot.lidar_tstamp=}"
+            f"episode_reward={self._episode_reward} {reward=} {dist_to_goal=} goal={self.goal} position={self._robot.position} current_time={time.time()} position_tstamp={self._robot.position_tstamp} lidar_tstamp={self._robot.lidar_tstamp}"
         )
 
         end = time.time()
@@ -178,6 +180,7 @@ class VelmwheelEnv(gym.Env):
 
     def reset(self):
         self._steps = 0
+        self._episode_reward = 0.0
         call_service(self._reset_world_srv)
         if not self.goal or not self.starting_position:
             self._start_position_and_goal_generator.generate_next()
