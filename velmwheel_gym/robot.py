@@ -140,8 +140,10 @@ class VelmwheelRobot:
     def real_time_factor(self, factor: float):
         self._real_time_factor = factor
 
-    def reset(self, starting_position: Point):
+    def reset(self, starting_position: Point, timeout_sec: float = 10.0):
         """Resets robot's state."""
+        start = time.time()
+
         self.stop()
         self._ignore_collisions_until = time.time() + 1
         self._is_collide = False
@@ -150,6 +152,9 @@ class VelmwheelRobot:
 
         while self._simulation_time is None:
             rclpy.spin_once(self._node, timeout_sec=1.0)
+            if time.time() - start > timeout_sec:
+                logger.warning("Failed to reset robot's state")
+                return
 
         self._set_entity_pose(starting_position)
         self._set_laser_scan_matcher_pose(starting_position)
@@ -157,6 +162,9 @@ class VelmwheelRobot:
 
         while self._position is None or self._lidar_data is None:
             rclpy.spin_once(self._node, timeout_sec=1.0)
+            if time.time() - start > timeout_sec:
+                logger.warning("Failed to reset robot's state")
+                return
 
     def update(self):
         """Updates robot's state measurements."""
