@@ -7,15 +7,15 @@ from stable_baselines3.common.callbacks import (
     StopTrainingOnNoModelImprovement,
 )
 
-from velmwheel_ai.common import (
+from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
+from velmwheel_gym.logger import init_logging
+from velmwheel_rl.common import (
     ParameterReader,
     bootstrap_argument_parser,
     create_model,
     get_model_save_path_and_tb_log_name,
     load_model,
 )
-from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
-from velmwheel_gym.logger import init_logging
 
 # ---------------------------------------------------------------------------- #
 #                                 Configuration                                #

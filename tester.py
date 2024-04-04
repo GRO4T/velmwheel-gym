@@ -4,10 +4,10 @@ import subprocess
 
 import gym
 
-from velmwheel_ai.common import ParameterReader, bootstrap_argument_parser, load_model
 from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
 from velmwheel_gym.logger import init_logging
 from velmwheel_gym.types import Point
+from velmwheel_rl.common import ParameterReader, bootstrap_argument_parser, load_model
 
 # ---------------------------------------------------------------------------- #
 #                                 Configuration                                #

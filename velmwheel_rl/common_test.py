@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from velmwheel_ai.common import get_model_save_path_and_tb_log_name
+from velmwheel_rl.common import get_model_save_path_and_tb_log_name
 
 
 @pytest.mark.parametrize(

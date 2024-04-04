@@ -78,6 +78,7 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
             action_noise = NormalActionNoise(
                 mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
             )
+            policy_kwargs = dict(net_arch=dict(pi=[512, 512], qf=[512, 512]))
             model = TD3(
                 "MlpPolicy",
                 env,
@@ -85,14 +86,20 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
                 action_noise=action_noise,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
+                buffer_size=int(1e4),
+                learning_starts=10000,
+                policy_kwargs=policy_kwargs,
             )
         case "PPO":
+            policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))
             model = PPO(
                 "MlpPolicy",
                 env,
                 verbose=1,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
+                policy_kwargs=policy_kwargs,
+                # n_steps=4096,
             )
         case "SAC":
             model = SAC(
