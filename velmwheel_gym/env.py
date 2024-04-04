@@ -160,7 +160,7 @@ class VelmwheelEnv(gym.Env):
 
         obs = self._observe()
 
-        dist_to_goal = self._calculate_distance_to_goal(obs)
+        dist_to_goal = math.dist(self.goal, self._robot.position)
         num_passed_points = self._global_guidance_path.update(self._robot.position)
 
         reward, done = self._calculate_reward(dist_to_goal, num_passed_points)
@@ -185,6 +185,7 @@ class VelmwheelEnv(gym.Env):
         self._episode_reward = 0.0
         call_service(self._reset_world_srv)
         self._start_position_and_goal_generator.generate_next()
+        self._publish_goal()
         self._robot.reset(self.starting_position)
 
         if (
@@ -248,10 +249,6 @@ class VelmwheelEnv(gym.Env):
         obs.extend(self._robot.normalized_lidar_data)
 
         return obs
-
-    def _calculate_distance_to_goal(self, obs: np.array) -> float:
-        pos_x, pos_y, *_ = obs
-        return math.dist(self.goal, (pos_x, pos_y))
 
     def _calculate_reward(
         self, dist_to_goal: float, num_passed_points: int
