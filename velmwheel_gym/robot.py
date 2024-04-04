@@ -238,8 +238,7 @@ class VelmwheelRobot:
     def _lidar_callback(self, message: LaserScan):
         self._lidar_max_range = message.range_max
         self._lidar_data = [
-            lambda x: max(message.range_min, min(message.range_max, x))
-            for x in message.ranges
+            max(message.range_min, min(message.range_max, x)) for x in message.ranges
         ]
         self._lidar_tstamp = time.time()
 
