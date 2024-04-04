@@ -35,10 +35,12 @@ GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 WAIT_FOR_NEW_PATH_TIMEOUT_SEC = 15
 MAP_FRAME_POSITION_ERROR_TOLERANCE = 0.5
 
-COLLISION_PENALTY = -5.0
-DETOUR_PENALTY = -1.0
-SUCCESS_REWARD = 5.0
-PATH_FOLLOWING_REWARD = 5.0
+COLLISION_PENALTY = -0.9
+DETOUR_PENALTY = -0.1
+SUCCESS_REWARD = 0.5
+PATH_FOLLOWING_REWARD = 0.5
+
+POSITION_NORMALIZATION_FACTOR = 5.0
 
 
 class VelmwheelEnv(gym.Env):
@@ -182,8 +184,7 @@ class VelmwheelEnv(gym.Env):
         self._steps = 0
         self._episode_reward = 0.0
         call_service(self._reset_world_srv)
-        if not self.goal or not self.starting_position:
-            self._start_position_and_goal_generator.generate_next()
+        self._start_position_and_goal_generator.generate_next()
         self._robot.reset(self.starting_position)
 
         if (
@@ -241,7 +242,10 @@ class VelmwheelEnv(gym.Env):
             logger.warning("No global guidance path points")
             obs.extend([self.goal.x, self.goal.y])
 
-        obs.extend(self._robot.lidar_data)
+        # normalize position and goal coordinates
+        obs = [o / POSITION_NORMALIZATION_FACTOR for o in obs]
+
+        obs.extend(self._robot.normalized_lidar_data)
 
         return obs
 
@@ -262,7 +266,6 @@ class VelmwheelEnv(gym.Env):
         if self._is_goal_reached(dist_to_goal):
             logger.debug(f"SUCCESS: Robot reached goal at {self.goal=}")
             self._start_position_and_goal_generator.register_goal_reached()
-            self._start_position_and_goal_generator.generate_next()
             return SUCCESS_REWARD, True
 
         if num_passed_points > 0:

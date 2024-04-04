@@ -39,6 +39,7 @@ class VelmwheelRobot:
         self._position_tstamp: float = 0.0
         self._lidar_data: Optional[list[float]] = None
         self._lidar_tstamp: float = 0.0
+        self._lidar_max_range: Optional[float] = None
         self._simulation_time: Optional[int] = None
         self._real_time_factor: float = 1.0
         self._ignore_collisions_until: float = 0.0
@@ -113,9 +114,16 @@ class VelmwheelRobot:
         self._position_tstamp = value
 
     @property
-    def lidar_data(self):
+    def lidar_data(self) -> Optional[list[float]]:
         """LIDAR data."""
         return self._lidar_data
+
+    @property
+    def normalized_lidar_data(self) -> Optional[list[float]]:
+        """Normalized LIDAR data. Measurements are scaled to the range [0, 1]."""
+        if not self._lidar_data:
+            return None
+        return [x / self._lidar_max_range for x in self._lidar_data]
 
     @property
     def lidar_tstamp(self) -> float:
@@ -228,12 +236,11 @@ class VelmwheelRobot:
         self._position_tstamp = time.time()
 
     def _lidar_callback(self, message: LaserScan):
-        self._lidar_data = list(
-            map(
-                lambda x: max(message.range_min, min(message.range_max, x)),
-                message.ranges,
-            )
-        )
+        self._lidar_max_range = message.range_max
+        self._lidar_data = [
+            lambda x: max(message.range_min, min(message.range_max, x))
+            for x in message.ranges
+        ]
         self._lidar_tstamp = time.time()
 
     def _publish_navigation_initial_pose(self):
