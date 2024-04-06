@@ -10,5 +10,4 @@
 **/logs/tensorboard/**
 **/models/**
 **/__pycache__
-config.ini
 *.pkl
