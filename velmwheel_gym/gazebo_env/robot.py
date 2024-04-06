@@ -11,8 +11,8 @@ from sensor_msgs.msg import LaserScan
 from velmwheel_gazebo_msgs.msg import ContactState
 
 from velmwheel_gym.constants import BASE_STEP_TIME
+from velmwheel_gym.gazebo_env.ros_utils import call_service, create_ros_service_client
 from velmwheel_gym.types import Point
-from velmwheel_gym.utils import call_service, create_ros_service_client
 
 logger = logging.getLogger(__name__)
 

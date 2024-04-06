@@ -8,9 +8,8 @@ from stable_baselines3.common.callbacks import (
 )
 from stable_baselines3.common.env_util import make_vec_env
 
-from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
+from velmwheel_gym import *  # pylint: disable=unused-import
 from velmwheel_gym.logger import init_logging
-from velmwheel_gym_2d.env import Robot2dEnv  # pylint: disable=unused-import
 from velmwheel_rl.common import (
     ParameterReader,
     bootstrap_argument_parser,

@@ -12,16 +12,16 @@ from rclpy.qos import qos_profile_system_default
 from std_srvs.srv import Empty
 
 from velmwheel_gym.constants import BASE_STEP_TIME, LIDAR_DATA_SIZE
-from velmwheel_gym.global_guidance_path import (
+from velmwheel_gym.gazebo_env.global_guidance_path import (
     POINT_REACHED_THRESHOLD,
     GlobalGuidancePath,
 )
-from velmwheel_gym.robot import VelmwheelRobot
-from velmwheel_gym.start_position_and_goal_generator import (
+from velmwheel_gym.gazebo_env.robot import VelmwheelRobot
+from velmwheel_gym.gazebo_env.ros_utils import call_service, create_ros_service_client
+from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
 )
 from velmwheel_gym.types import Point
-from velmwheel_gym.utils import call_service, create_ros_service_client
 
 logger = logging.getLogger(__name__)
 

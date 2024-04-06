@@ -4,10 +4,9 @@ import subprocess
 
 import gymnasium as gym
 
-from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
+from velmwheel_gym import *  # pylint: disable=unused-import
 from velmwheel_gym.logger import init_logging
 from velmwheel_gym.types import Point
-from velmwheel_gym_2d.env import Robot2dEnv  # pylint: disable=unused-import
 from velmwheel_rl.common import ParameterReader, bootstrap_argument_parser, load_model
 
 # ---------------------------------------------------------------------------- #

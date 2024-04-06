@@ -2,8 +2,8 @@ import argparse
 import configparser
 import os
 
+import gymnasium as gym
 import numpy as np
-from gymnasium import gym
 from stable_baselines3 import DDPG, PPO, SAC, TD3
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.noise import (
