@@ -1,14 +1,16 @@
 import configparser
 
-import gym
+import gymnasium as gym
 from stable_baselines3.common.callbacks import (
     CheckpointCallback,
     EvalCallback,
     StopTrainingOnNoModelImprovement,
 )
+from stable_baselines3.common.env_util import make_vec_env
 
 from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
 from velmwheel_gym.logger import init_logging
+from velmwheel_gym_2d.env import Robot2dEnv  # pylint: disable=unused-import
 from velmwheel_rl.common import (
     ParameterReader,
     bootstrap_argument_parser,
@@ -49,9 +51,10 @@ model_save_path, tb_log_name = get_model_save_path_and_tb_log_name(
     algorithm, model_path
 )
 
-env = gym.make(gym_env)
-env.env.min_goal_dist = goal_reached_threshold
-env.env.real_time_factor = real_time_factor
+env = gym.make(
+    gym_env, min_goal_dist=goal_reached_threshold, real_time_factor=real_time_factor
+)
+# env = make_vec_env(gym_env, n_envs=4)
 
 if model_path:
     model = load_model(algorithm, env, model_path, replay_buffer_path)
@@ -59,18 +62,11 @@ else:
     model = create_model(algorithm, env)
 
 checkpoint_callback = CheckpointCallback(
-    save_freq=1000,
+    save_freq=100000,
     save_path=model_save_path,
     name_prefix=algorithm.lower(),
     save_replay_buffer=True,
     save_vecnormalize=True,
-)
-
-stop_train_callback = StopTrainingOnNoModelImprovement(
-    max_no_improvement_evals=10, min_evals=10, verbose=1
-)
-eval_callback = EvalCallback(
-    env, eval_freq=1000, callback_after_eval=stop_train_callback, verbose=1
 )
 
 model.learn(

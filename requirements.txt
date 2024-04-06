@@ -16,7 +16,6 @@ fsspec==2023.9.2
 google-auth==2.23.2
 google-auth-oauthlib==1.0.0
 grpcio==1.59.0
-gym==0.21.0
 gymnasium==0.29.1
 idna==3.4
 importlib-resources==6.1.0

@@ -2,11 +2,12 @@ import configparser
 import math
 import subprocess
 
-import gym
+import gymnasium as gym
 
 from velmwheel_gym.env import VelmwheelEnv  # pylint: disable=unused-import
 from velmwheel_gym.logger import init_logging
 from velmwheel_gym.types import Point
+from velmwheel_gym_2d.env import Robot2dEnv  # pylint: disable=unused-import
 from velmwheel_rl.common import ParameterReader, bootstrap_argument_parser, load_model
 
 # ---------------------------------------------------------------------------- #
@@ -49,16 +50,17 @@ env.env.goal = Point(*goal)
 
 model = load_model(algorithm, env, model_path, replay_buffer_path)
 
-obs = env.reset()
+obs, _ = env.reset()
 
 while True:
-    action, _states = model.predict(obs, deterministic=True)
+    action, _ = model.predict(obs, deterministic=True)
 
-    obs, rewards, dones, info = env.step(action)
+    obs, reward, terminated, truncated, info = env.step(action)
 
     print("----------------------------------------------")
-    print(f"action={action}")
-    print(f"{obs=}")
+    print(f"{action=}")
+    print(f"{reward=}")
+    print(f"{terminated=}")
     pos_x, pos_y, *_ = obs
     dist_to_goal = math.dist(goal, (pos_x, pos_y))
     print(f"{dist_to_goal=}")
@@ -67,6 +69,8 @@ while True:
 
     if dist_to_goal < min_dist_to_goal:
         min_dist_to_goal = dist_to_goal
+
+    env.render()
 
     if dist_to_goal < goal_reached_threshold:
         env.env._robot.move([0.0, 0.0])  # pylint: disable=protected-access

@@ -3,7 +3,7 @@ import math
 import time
 from copy import deepcopy
 
-import gym
+import gymnasium as gym
 import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped
@@ -44,7 +44,7 @@ POSITION_NORMALIZATION_FACTOR = 5.0
 
 
 class VelmwheelEnv(gym.Env):
-    def __init__(self):
+    def __init__(self, **kwargs):
         logger.debug("Creating VelmwheelEnv")
         super().__init__()
 
@@ -55,8 +55,8 @@ class VelmwheelEnv(gym.Env):
             low=-100.0, high=100.0, shape=(6 + LIDAR_DATA_SIZE,), dtype=np.float64
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
-        self._min_goal_dist: float = 0.0
-        self._real_time_factor: float = 1.0
+        self._min_goal_dist: float = kwargs["min_goal_dist"]
+        self._real_time_factor: float = kwargs["real_time_factor"]
         self._global_guidance_path: GlobalGuidancePath = None
         self._global_guidance_path_cache: dict[
             tuple[Point, Point], GlobalGuidancePath
@@ -146,6 +146,10 @@ class VelmwheelEnv(gym.Env):
         self._real_time_factor = factor
         self._robot.real_time_factor = factor
 
+    @property
+    def max_episode_steps(self) -> int:
+        return self._time_limit_max_episode_steps
+
     def step(self, action):
         self._steps += 1
         step_time = BASE_STEP_TIME / self.real_time_factor
@@ -163,7 +167,7 @@ class VelmwheelEnv(gym.Env):
         dist_to_goal = math.dist(self.goal, self._robot.position)
         num_passed_points = self._global_guidance_path.update(self._robot.position)
 
-        reward, done = self._calculate_reward(dist_to_goal, num_passed_points)
+        reward, terminated = self._calculate_reward(dist_to_goal, num_passed_points)
         info = {}
         self._episode_reward += reward
 
@@ -178,9 +182,9 @@ class VelmwheelEnv(gym.Env):
         else:
             logger.warning(f"Step time ({step_time}) exceeded: {elapsed}")
 
-        return obs, reward, done, info
+        return obs, reward, terminated, False, {}
 
-    def reset(self):
+    def reset(self, seed=None, options=None):
         self._steps = 0
         self._episode_reward = 0.0
         call_service(self._reset_world_srv)
@@ -200,13 +204,16 @@ class VelmwheelEnv(gym.Env):
         self._robot.position_tstamp = time.time()
         self._robot.lidar_tstamp = time.time()
 
-        return self._observe()
+        return self._observe(), {}
 
     def close(self):
         logger.info("Closing " + self.__class__.__name__ + " environment.")
         self._robot.stop()
         self._node.destroy_node()
         rclpy.shutdown()
+
+    def render(self, mode="human"):
+        pass
 
     def _get_global_guidance_path_from_cache(self):
         logger.debug(
@@ -272,15 +279,15 @@ class VelmwheelEnv(gym.Env):
             )
 
         if self._is_detoured_from_global_guidance_path():
-            return DETOUR_PENALTY / self.spec.max_episode_steps, False
+            return DETOUR_PENALTY / self.max_episode_steps, False
 
         return 0.0, False
 
     def _calculate_collision_penalty(self) -> float:
         remaining_detour_penalty = (
-            (self.spec.max_episode_steps - self._steps)
+            (self.max_episode_steps - self._steps)
             * DETOUR_PENALTY
-            / self.spec.max_episode_steps
+            / self.max_episode_steps
         )
         return COLLISION_PENALTY + remaining_detour_penalty
 

@@ -2,8 +2,8 @@ import argparse
 import configparser
 import os
 
-import gym
 import numpy as np
+from gymnasium import gym
 from stable_baselines3 import DDPG, PPO, SAC, TD3
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.noise import (
@@ -76,9 +76,9 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
         case "TD3":
             n_actions = env.action_space.shape[-1]
             action_noise = NormalActionNoise(
-                mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
+                mean=np.zeros(n_actions), sigma=np.ones(n_actions)
             )
-            policy_kwargs = dict(net_arch=dict(pi=[512, 512], qf=[512, 512]))
+            policy_kwargs = dict(net_arch=dict(pi=[800, 600, 600], qf=[800, 600, 600]))
             model = TD3(
                 "MlpPolicy",
                 env,
@@ -86,9 +86,15 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
                 action_noise=action_noise,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                buffer_size=int(1e4),
-                learning_starts=10000,
+                buffer_size=int(1e6),
+                learning_starts=100,
                 policy_kwargs=policy_kwargs,
+                train_freq=(2, "episode"),
+                batch_size=40,
+                gamma=0.9999,
+                seed=0,
+                optimize_memory_usage=True,
+                replay_buffer_kwargs=dict(handle_timeout_termination=False),
             )
         case "PPO":
             policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))
@@ -99,6 +105,7 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
                 policy_kwargs=policy_kwargs,
+                gamma=0.9999,
                 # n_steps=4096,
             )
         case "SAC":
