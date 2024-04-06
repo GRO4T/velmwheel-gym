@@ -24,6 +24,13 @@ from velmwheel_rl.common import (
 
 parser = bootstrap_argument_parser()
 parser.add_argument("--timesteps", type=int, help="Number of timesteps", required=False)
+parser.add_argument(
+    "--envs",
+    type=int,
+    help="Number of parallel environments",
+    required=False,
+    default=1,
+)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -39,6 +46,7 @@ replay_buffer_path = param_reader.read("replay_buffer")
 timesteps = int(param_reader.read("timesteps"))
 goal_reached_threshold = float(param_reader.read("goal_reached_threshold"))
 real_time_factor = float(param_reader.read("real_time_factor"))
+envs = int(param_reader.read("envs"))
 
 init_logging(log_level)
 
@@ -50,10 +58,13 @@ model_save_path, tb_log_name = get_model_save_path_and_tb_log_name(
     algorithm, model_path
 )
 
-env = gym.make(
-    gym_env, min_goal_dist=goal_reached_threshold, real_time_factor=real_time_factor
+extra_params = dict(
+    min_goal_dist=goal_reached_threshold, real_time_factor=real_time_factor
 )
-# env = make_vec_env(gym_env, n_envs=4)
+if envs > 1:
+    env = make_vec_env(gym_env, n_envs=4, **extra_params)
+else:
+    env = gym.make(gym_env, **extra_params)
 
 if model_path:
     model = load_model(algorithm, env, model_path, replay_buffer_path)
@@ -61,7 +72,7 @@ else:
     model = create_model(algorithm, env)
 
 checkpoint_callback = CheckpointCallback(
-    save_freq=100000,
+    save_freq=5000,
     save_path=model_save_path,
     name_prefix=algorithm.lower(),
     save_replay_buffer=True,

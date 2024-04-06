@@ -240,6 +240,12 @@ class VelmwheelRobot:
         self._lidar_data = [
             max(message.range_min, min(message.range_max, x)) for x in message.ranges
         ]
+
+        # NOTE: transforming from 541 measurements to 90
+        # TODO: make it more generic
+        self._lidar_data = self._lidar_data[::6]
+        self._lidar_data.pop()
+
         self._lidar_tstamp = time.time()
 
     def _publish_navigation_initial_pose(self):

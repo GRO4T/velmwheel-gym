@@ -1,8 +1,9 @@
 """ Based on: https://github.com/EmanuelSamir/simple-2d-robot-lidar-env/blob/main/gym_robot2d/envs/robot2d_env.py """
 
-# import gym
 import gymnasium as gym
 import numpy as np
+
+from velmwheel_gym.constants import LIDAR_DATA_SIZE
 
 from .robot2d import Robot2D
 
@@ -75,7 +76,6 @@ class Robot2dEnv(gym.Env):
             dtype=np.float64,
         )
 
-        LIDAR_DATA_SIZE = 90  # TODO: move to some common file
         self.observation_space = gym.spaces.Box(
             low=-100.0, high=100.0, shape=(6 + LIDAR_DATA_SIZE,), dtype=np.float64
         )
