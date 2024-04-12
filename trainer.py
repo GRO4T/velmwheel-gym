@@ -1,14 +1,10 @@
 import configparser
 
 import gymnasium as gym
-from stable_baselines3.common.callbacks import (
-    CheckpointCallback,
-    EvalCallback,
-    StopTrainingOnNoModelImprovement,
-)
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
 
-from velmwheel_gym import *  # pylint: disable=unused-import
+from velmwheel_gym import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from velmwheel_gym.logger import init_logging
 from velmwheel_rl.common import (
     ParameterReader,
@@ -34,7 +30,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
-config.read(["config.ini"])
+config.read([args.config])
 param_reader = ParameterReader("trainer", args, config)
 
 # pylint: disable=duplicate-code
@@ -67,12 +63,12 @@ else:
     env = gym.make(gym_env, **extra_params)
 
 if model_path:
-    model = load_model(algorithm, env, model_path, replay_buffer_path)
+    model = load_model(algorithm, env, param_reader, model_path, replay_buffer_path)
 else:
-    model = create_model(algorithm, env)
+    model = create_model(algorithm, env, param_reader)
 
 checkpoint_callback = CheckpointCallback(
-    save_freq=5000,
+    save_freq=20000,
     save_path=model_save_path,
     name_prefix=algorithm.lower(),
     save_replay_buffer=True,

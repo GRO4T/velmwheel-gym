@@ -1,15 +1,13 @@
 import argparse
 import configparser
 import os
+from typing import Callable
 
 import gymnasium as gym
 import numpy as np
 from stable_baselines3 import DDPG, PPO, SAC, TD3
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.noise import (
-    NormalActionNoise,
-    OrnsteinUhlenbeckActionNoise,
-)
+from stable_baselines3.common.noise import OrnsteinUhlenbeckActionNoise
 
 
 class ParameterReader:
@@ -23,11 +21,11 @@ class ParameterReader:
         self._args = args
         self._config = config
 
-    def read(self, name: str):
+    def read(self, name: str, section: str = None):
         value = (
             vars(self._args)[name]
             if name in self._args and vars(self._args)[name] is not None
-            else self._config.get(self._default_section, name)
+            else self._config.get(section if section else self._default_section, name)
         )
         print(f"{name}={value}")
         return value
@@ -58,12 +56,35 @@ def get_model_save_path_and_tb_log_name(
     )
 
 
-def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
+def linear_schedule(initial_value: float) -> Callable[[float], float]:
+    """
+    Linear learning rate schedule.
+
+    :param initial_value: Initial learning rate.
+    :return: schedule that computes
+    current learning rate depending on remaining progress
+    """
+
+    def func(progress_remaining: float) -> float:
+        """
+        Progress will decrease from 1 (beginning) to 0.
+
+        :param progress_remaining:
+        :return: current learning rate
+        """
+        return progress_remaining * initial_value
+
+    return func
+
+
+def create_model(
+    algorithm: str, env: gym.Env, param_reader: ParameterReader
+) -> BaseAlgorithm:
     match algorithm:
         case "DDPG":
             n_actions = env.action_space.shape[-1]
             action_noise = OrnsteinUhlenbeckActionNoise(
-                mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions)
+                mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
             )
             model = DDPG(
                 "MlpPolicy",
@@ -72,11 +93,14 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
                 action_noise=action_noise,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
+                learning_rate=linear_schedule(0.001),
+                gamma=float(param_reader.read("gamma", "DDPG")),
+                buffer_size=int(param_reader.read("buffer_size", "DDPG")),
             )
         case "TD3":
             n_actions = env.action_space.shape[-1]
-            action_noise = NormalActionNoise(
-                mean=np.zeros(n_actions), sigma=np.ones(n_actions)
+            action_noise = OrnsteinUhlenbeckActionNoise(
+                mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
             )
             policy_kwargs = dict(net_arch=dict(pi=[800, 600, 600], qf=[800, 600, 600]))
             model = TD3(
@@ -86,25 +110,26 @@ def create_model(algorithm: str, env: gym.Env) -> BaseAlgorithm:
                 action_noise=action_noise,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                buffer_size=int(1e6),
+                buffer_size=int(1e5),
                 learning_starts=100,
                 policy_kwargs=policy_kwargs,
-                train_freq=(2, "episode"),
-                batch_size=40,
+                train_freq=(1, "episode"),
+                batch_size=int(param_reader.read("batch_size", "TD3")),
                 gamma=0.9999,
+                learning_rate=linear_schedule(0.001),
                 seed=0,
                 optimize_memory_usage=True,
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
             )
         case "PPO":
-            policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))
+            # policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))
             model = PPO(
                 "MlpPolicy",
                 env,
                 verbose=1,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                policy_kwargs=policy_kwargs,
+                # policy_kwargs=policy_kwargs,
                 gamma=0.9999,
                 # n_steps=4096,
             )
@@ -131,6 +156,7 @@ def _load_replay_buffer(model: BaseAlgorithm, replay_buffer_path: str):
 def load_model(
     algorithm: str,
     env: gym.Env,
+    param_reader: ParameterReader,
     model_path: str,
     replay_buffer_path: str,
 ) -> BaseAlgorithm:
@@ -160,6 +186,14 @@ def bootstrap_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="Tester script",
         description="Script for testing reinforcement learning models for WUT Velmwheel robot",
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        help="Path to the configuration file",
+        required=False,
+        default="config.ini",
     )
     parser.add_argument(
         "--gym_env", type=str, help="Name of the Gym environment", required=False

@@ -11,7 +11,12 @@ from nav_msgs.msg import Path
 from rclpy.qos import qos_profile_system_default
 from std_srvs.srv import Empty
 
-from velmwheel_gym.constants import BASE_STEP_TIME, LIDAR_DATA_SIZE
+from velmwheel_gym.constants import (
+    BASE_STEP_TIME,
+    COORDINATES_NORMALIZATION_FACTOR,
+    GLOBAL_GUIDANCE_OBSERVATION_POINTS,
+    LIDAR_DATA_SIZE,
+)
 from velmwheel_gym.gazebo_env.global_guidance_path import (
     POINT_REACHED_THRESHOLD,
     GlobalGuidancePath,
@@ -40,8 +45,6 @@ DETOUR_PENALTY = -0.1
 SUCCESS_REWARD = 0.5
 PATH_FOLLOWING_REWARD = 0.5
 
-POSITION_NORMALIZATION_FACTOR = 5.0
-
 
 class VelmwheelEnv(gym.Env):
     def __init__(self, **kwargs):
@@ -52,7 +55,10 @@ class VelmwheelEnv(gym.Env):
             low=-1.0, high=1.0, shape=(2,), dtype=np.float64
         )
         self.observation_space = gym.spaces.Box(
-            low=-100.0, high=100.0, shape=(6 + LIDAR_DATA_SIZE,), dtype=np.float64
+            low=-1.0,
+            high=1.0,
+            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
+            dtype=np.float64,
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
         self._min_goal_dist: float = kwargs["min_goal_dist"]
@@ -108,6 +114,10 @@ class VelmwheelEnv(gym.Env):
         rclpy.shutdown()
         self._simulation_init()
         self._robot = VelmwheelRobot()
+
+    @property
+    def robot_position(self) -> Point:
+        return self._robot.position
 
     @property
     def goal(self) -> Point:
@@ -168,7 +178,6 @@ class VelmwheelEnv(gym.Env):
         num_passed_points = self._global_guidance_path.update(self._robot.position)
 
         reward, terminated = self._calculate_reward(dist_to_goal, num_passed_points)
-        info = {}
         self._episode_reward += reward
 
         logger.trace(
@@ -184,6 +193,7 @@ class VelmwheelEnv(gym.Env):
 
         return obs, reward, terminated, False, {}
 
+    # pylint: disable=unused-argument
     def reset(self, seed=None, options=None):
         self._steps = 0
         self._episode_reward = 0.0
@@ -240,22 +250,28 @@ class VelmwheelEnv(gym.Env):
         obs = [position.x, position.y, self.goal.x, self.goal.y]
 
         if self._global_guidance_path.points:
-            obs.extend(
-                [
-                    self._global_guidance_path.points[0].x,
-                    self._global_guidance_path.points[0].y,
-                ]
-            )
+            # extract 10 points evenly space along the global guidance path
+            for i in range(GLOBAL_GUIDANCE_OBSERVATION_POINTS):
+                idx = int(
+                    (i / GLOBAL_GUIDANCE_OBSERVATION_POINTS)
+                    * len(self._global_guidance_path.points)
+                )
+                obs.extend(
+                    [
+                        self._global_guidance_path.points[idx].x,
+                        self._global_guidance_path.points[idx].y,
+                    ]
+                )
         else:
             logger.warning("No global guidance path points")
-            obs.extend([self.goal.x, self.goal.y])
+            obs.extend(10 * [self.goal.x, self.goal.y])
 
         # normalize position and goal coordinates
-        obs = [o / POSITION_NORMALIZATION_FACTOR for o in obs]
+        obs = [o / COORDINATES_NORMALIZATION_FACTOR for o in obs]
 
         obs.extend(self._robot.normalized_lidar_data)
 
-        return obs
+        return np.array(obs)
 
     def _calculate_reward(
         self, dist_to_goal: float, num_passed_points: int

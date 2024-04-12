@@ -3,6 +3,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
+from velmwheel_gym.constants import LIDAR_DATA_SIZE
+
 from .utils import *
 
 
@@ -12,11 +14,10 @@ class Robot2D:
         env_max_size=5,
         env_min_size=-5,
         robot_radius=0.4,
-        lidar_max_range=2.0,
+        lidar_max_range=20.0,
         dT=0.01,
         is_render=True,
         is_goal=True,
-        is_rotated=True,
     ):
         # Environment
         self.env = Environment(env_min_size, env_max_size)
@@ -28,7 +29,6 @@ class Robot2D:
         self.yr = 0
         self.thr = 0
         self.rr = robot_radius
-        self.is_rotated = is_rotated
 
         # Goal parameters
         self.is_goal = is_goal
@@ -56,9 +56,6 @@ class Robot2D:
         self.yr = np.random.uniform(
             low=self.env_min_size + self.rr, high=self.env_max_size - self.rr
         )
-
-        if self.is_rotated:
-            self.thr = np.random.uniform(low=-np.pi, high=np.pi)
 
         if self.is_goal:
             self.xg, self.yg = self.env._random_point_without_robot(
@@ -150,7 +147,7 @@ class Robot2D:
         self.yls = []
         touches = []
         fov = np.deg2rad(360)
-        alphas = np.linspace(-fov / 2, fov / 2, 90)
+        alphas = np.linspace(-fov / 2, fov / 2, LIDAR_DATA_SIZE)
         for alpha in alphas:
             self.xls.append(self.xr + r * np.cos(alpha + self.thr))
             self.yls.append(self.yr + r * np.sin(alpha + self.thr))

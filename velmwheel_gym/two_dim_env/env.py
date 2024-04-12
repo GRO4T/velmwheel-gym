@@ -1,11 +1,20 @@
 """ Based on: https://github.com/EmanuelSamir/simple-2d-robot-lidar-env/blob/main/gym_robot2d/envs/robot2d_env.py """
 
+import math
+
 import gymnasium as gym
 import numpy as np
 
-from velmwheel_gym.constants import LIDAR_DATA_SIZE
+from velmwheel_gym.constants import (
+    COORDINATES_NORMALIZATION_FACTOR,
+    GLOBAL_GUIDANCE_OBSERVATION_POINTS,
+    LIDAR_DATA_SIZE,
+)
+from velmwheel_gym.types import Point
 
 from .robot2d import Robot2D
+
+ACTION_NORMALIZATION_FACTOR = 5.0
 
 
 class Robot2dEnv(gym.Env):
@@ -13,63 +22,32 @@ class Robot2dEnv(gym.Env):
         self,
         dT=0.05,
         is_goal=True,
-        is_rotated=False,
         eps_err=0.4,
         max_action_magnitude=5,
         **kwargs,
     ):
-        """
-        Description:
-                A 2D Robot is placed on an empty environment
-                sorrounded by squared and round obstacles (see Simulation).
-                The robot starts at the center making its way throught the
-                obstacles to reachs its goal position.
-
-        Observation:
-                Type: Box (5)
-                Num 	Observation 	Min 	Max
-                0  		X Position		-5		5
-                1 		X Velocity		-5		5
-
-        Action:
-                Type: Box (2)
-                Num 	Action 	 Min 	Max
-                0	 	Vx	 -Inf	Inf
-                1 		Vy    -Inf 	Inf
-        """
-
-        # super(Robot2dEnv, self).__init__()
         super().__init__()
 
         # Initialize variables
         self.state = None
         self.viewer = None
-        self.is_rotated = is_rotated
         self.is_goal = is_goal
         self.dT = dT
 
-        self.robot = Robot2D(
-            dT=self.dT, is_render=True, is_goal=self.is_goal, is_rotated=self.is_rotated
-        )
+        self.robot = Robot2D(dT=self.dT, is_render=True, is_goal=self.is_goal)
         self.eps_err = eps_err
         self.steps = 0
 
         self.final_state = 0
         self.max_action_magnitude = max_action_magnitude
 
-        # Position variables
-        self.robot_goal = (
-            np.array([0.0, 0, 0.0]) if self.is_rotated else np.array([0.0, 0.0])
-        )
+        self.robot_goal = np.array([0.0, 0.0])
 
         self.xr0 = 0
         self.yr0 = 0
         self.thr0 = 0
 
-        # TODO: rescale max_action_magnitude to be consistent with 3D env
         self.action_space = gym.spaces.Box(
-            # low=-max_action_magnitude,
-            # high=max_action_magnitude,
             low=-1.0,
             high=1.0,
             shape=(2,),
@@ -77,12 +55,27 @@ class Robot2dEnv(gym.Env):
         )
 
         self.observation_space = gym.spaces.Box(
-            low=-100.0, high=100.0, shape=(6 + LIDAR_DATA_SIZE,), dtype=np.float64
+            low=-1.0,
+            high=1.0,
+            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
+            dtype=np.float64,
         )
 
     @property
     def max_episode_steps(self) -> int:
         return self._time_limit_max_episode_steps
+
+    @property
+    def goal(self) -> Point:
+        return Point(*self.robot_goal)
+
+    @property
+    def robot_position(self) -> Point:
+        return Point(self.robot.xr, self.robot.yr)
+
+    @property
+    def starting_position(self) -> Point:
+        return Point(self.xr0, self.yr0)
 
     def _observe(self, robot_pos):
         self.robot.scanning()
@@ -94,30 +87,28 @@ class Robot2dEnv(gym.Env):
             xls = np.array([self.robot.max_range])
             yls = np.array([0.0])
 
+        # convert LIDAR touches to ranges
         ranges = []
         for xl, yl in zip(xls, yls):
             ranges.append(np.linalg.norm([xl, yl]))
-        ranges = [min(r, self.robot.max_range) for r in ranges]
+        # clamp and normalize LIDAR ranges
+        ranges = [min(r, self.robot.max_range) / self.robot.max_range for r in ranges]
 
-        return np.concatenate((robot_pos, self.robot_goal, self.robot_goal, ranges))
+        position_normalized = robot_pos / COORDINATES_NORMALIZATION_FACTOR
+        goal_normalized = self.robot_goal / COORDINATES_NORMALIZATION_FACTOR
+        empty_global_guidace = np.zeros(
+            2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS
+        )  # NOTE: At the moment global planner is not implemented
+
+        return np.concatenate(
+            (position_normalized, goal_normalized, empty_global_guidace, ranges)
+        )
 
     def step(self, action):
-        if self.is_rotated:
-            required_dim = 3
-        else:
-            required_dim = 2
-
-        if np.shape(action)[0] != required_dim:
-            raise Exception(
-                "Wrong action dim. Expected to have {} but got {} instead.".format(
-                    np.shape(action)[0], required_dim
-                )
-            )
-
         # State Update
-        vx = action[0]
-        vy = action[1]
-        w = action[2] if self.is_rotated else 0.0
+        vx = ACTION_NORMALIZATION_FACTOR * action[0]
+        vy = ACTION_NORMALIZATION_FACTOR * action[1]
+        w = 0.0
 
         # Clip actions
         vx = np.clip(vx, -self.max_action_magnitude, self.max_action_magnitude)
@@ -133,10 +124,7 @@ class Robot2dEnv(gym.Env):
         r0_T_r = r0_T_I.dot(I_T_r)
         xr_r0, yr_r0, thr_r0 = mat2pose_2d(r0_T_r)
 
-        if self.is_rotated:
-            robot_pos = np.array([xr_r0, yr_r0, thr_r0])
-        else:
-            robot_pos = np.array([xr_r0, yr_r0])
+        robot_pos = np.array([xr_r0, yr_r0])
 
         r_T_I = inverse_mat_2d(I_T_r)
 
@@ -151,9 +139,7 @@ class Robot2dEnv(gym.Env):
         ## Notice we do not use from Transformation because goal does not have orientation
         thg_r = np.arctan2(yg_r, xg_r)
 
-        self.robot_goal = (
-            np.array([xg_r, yg_r, thg_r]) if self.is_rotated else np.array([xg_r, yg_r])
-        )
+        self.robot_goal = np.array([xg_r, yg_r])
 
         fov = np.pi / 2
         lt = 0.6  # 2.
@@ -174,7 +160,12 @@ class Robot2dEnv(gym.Env):
         # Rewards
         r_collide = -1.0
         r_success = 0.9
-        r_alive = 0.1 / self.max_episode_steps
+        goal_closeness_factor = (
+            1
+            - math.dist(self.robot_position, self.robot_goal)
+            / COORDINATES_NORMALIZATION_FACTOR
+        )
+        r_alive = goal_closeness_factor * 0.1 / self.max_episode_steps
         r_nav = r_alive
 
         # Done condition
@@ -218,10 +209,7 @@ class Robot2dEnv(gym.Env):
         r0_T_r = r0_T_I.dot(I_T_r)
         xr_r0, yr_r0, thr_r0 = mat2pose_2d(r0_T_r)
 
-        if self.is_rotated:
-            robot_pos = np.array([xr_r0, yr_r0, thr_r0])
-        else:
-            robot_pos = np.array([xr_r0, yr_r0])
+        robot_pos = np.array([xr_r0, yr_r0])
 
         r_T_I = inverse_mat_2d(I_T_r)
 
@@ -230,9 +218,7 @@ class Robot2dEnv(gym.Env):
         r_T_g = r_T_I.dot(I_T_g)
         xg_r, yg_r, thg_r = mat2pose_2d(r_T_g)
 
-        self.robot_goal = (
-            np.array([xg_r, yg_r, thg_r]) if self.is_rotated else np.array([xg_r, yg_r])
-        )
+        self.robot_goal = np.array([xg_r, yg_r])
 
         return self._observe(robot_pos), {}
 

@@ -4,7 +4,7 @@ import subprocess
 
 import gymnasium as gym
 
-from velmwheel_gym import *  # pylint: disable=unused-import
+from velmwheel_gym import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from velmwheel_gym.logger import init_logging
 from velmwheel_gym.types import Point
 from velmwheel_rl.common import ParameterReader, bootstrap_argument_parser, load_model
@@ -43,11 +43,11 @@ starting_position = Point(0.0, 0.0)
 goal = [goal_x, goal_y]
 min_dist_to_goal = math.inf  # pylint: disable=invalid-name
 
-env = gym.make(gym_env)
-env.env.real_time_factor = real_time_factor
-env.env.goal = Point(*goal)
+env = gym.make(
+    gym_env, min_goal_dist=goal_reached_threshold, real_time_factor=real_time_factor
+)
 
-model = load_model(algorithm, env, model_path, replay_buffer_path)
+model = load_model(algorithm, env, param_reader, model_path, replay_buffer_path)
 
 obs, _ = env.reset()
 
@@ -60,10 +60,13 @@ while True:
     print(f"{action=}")
     print(f"{reward=}")
     print(f"{terminated=}")
-    pos_x, pos_y, *_ = obs
-    dist_to_goal = math.dist(goal, (pos_x, pos_y))
+    dist_to_goal = math.dist(env.env.goal, env.env.robot_position)
     print(f"{dist_to_goal=}")
     print(f"{min_dist_to_goal=}")
+    print(f"{env.env.starting_position=}")
+    print(f"{env.env.goal=}")
+    print(f"{env.env.robot_position=}")
+    print(f"{obs=}")
     print("----------------------------------------------")
 
     if dist_to_goal < min_dist_to_goal:
