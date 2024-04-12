@@ -79,7 +79,14 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
 
 def create_model(
     algorithm: str, env: gym.Env, param_reader: ParameterReader
-) -> BaseAlgorithm:
+) -> tuple[BaseAlgorithm, dict]:
+    model_config = {
+        "gym_env": param_reader.read("gym_env"),
+        "algorithm": algorithm,
+        "total_timesteps": int(param_reader.read("timesteps")),
+        "policy_type": "MlpPolicy",
+    }
+
     match algorithm:
         case "DDPG":
             n_actions = env.action_space.shape[-1]
@@ -97,6 +104,11 @@ def create_model(
                 gamma=float(param_reader.read("gamma", "DDPG")),
                 buffer_size=int(param_reader.read("buffer_size", "DDPG")),
             )
+
+            model_config["action_noise"] = repr(action_noise)
+            model_config["learning_rate"] = repr(linear_schedule(0.001))
+            model_config["gamma"] = float(param_reader.read("gamma", "DDPG"))
+            model_config["buffer_size"] = int(param_reader.read("buffer_size", "DDPG"))
         case "TD3":
             n_actions = env.action_space.shape[-1]
             action_noise = OrnsteinUhlenbeckActionNoise(
@@ -110,17 +122,26 @@ def create_model(
                 action_noise=action_noise,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                buffer_size=int(1e5),
+                buffer_size=int(param_reader.read("buffer_size", "TD3")),
                 learning_starts=100,
                 policy_kwargs=policy_kwargs,
                 train_freq=(1, "episode"),
                 batch_size=int(param_reader.read("batch_size", "TD3")),
-                gamma=0.9999,
+                gamma=float(param_reader.read("gamma", "TD3")),
                 learning_rate=linear_schedule(0.001),
                 seed=0,
                 optimize_memory_usage=True,
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
             )
+
+            model_config["action_noise"] = repr(action_noise)
+            model_config["learning_rate"] = repr(linear_schedule(0.001))
+            model_config["gamma"] = float(param_reader.read("gamma", "TD3"))
+            model_config["buffer_size"] = int(param_reader.read("buffer_size", "TD3"))
+            model_config["batch_size"] = int(param_reader.read("batch_size", "TD3"))
+            model_config["policy_kwargs"] = repr(policy_kwargs)
+            model_config["train_freq"] = '(1, "episode")'
+            model_config["learning_starts"] = 100
         case "PPO":
             # policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))
             model = PPO(
@@ -130,9 +151,11 @@ def create_model(
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
                 # policy_kwargs=policy_kwargs,
-                gamma=0.9999,
+                gamma=float(param_reader.read("gamma", "PPO")),
                 # n_steps=4096,
             )
+
+            model_config["gamma"] = float(param_reader.read("gamma", "PPO"))
         case "SAC":
             model = SAC(
                 "MlpPolicy",
@@ -145,7 +168,7 @@ def create_model(
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
     print(model.policy)
-    return model
+    return model, model_config
 
 
 def _load_replay_buffer(model: BaseAlgorithm, replay_buffer_path: str):

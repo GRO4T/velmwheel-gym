@@ -3,7 +3,9 @@ import configparser
 import gymnasium as gym
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
+from wandb.integration.sb3 import WandbCallback
 
+import wandb
 from velmwheel_gym import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from velmwheel_gym.logger import init_logging
 from velmwheel_rl.common import (
@@ -65,7 +67,7 @@ else:
 if model_path:
     model = load_model(algorithm, env, param_reader, model_path, replay_buffer_path)
 else:
-    model = create_model(algorithm, env, param_reader)
+    model, model_config = create_model(algorithm, env, param_reader)
 
 checkpoint_callback = CheckpointCallback(
     save_freq=20000,
@@ -75,6 +77,14 @@ checkpoint_callback = CheckpointCallback(
     save_vecnormalize=True,
 )
 
+run = wandb.init(
+    project="velmwheel",
+    config=model_config,
+    sync_tensorboard=True,
+)
+
+wandb.watch(model.policy)
+
 model.learn(
     total_timesteps=timesteps,
     progress_bar=True,
@@ -82,3 +92,5 @@ model.learn(
     tb_log_name=tb_log_name,
     reset_num_timesteps=False,
 )
+
+run.finish()
