@@ -1,9 +1,9 @@
 import configparser
 
 import gymnasium as gym
+from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
-from wandb.integration.sb3 import WandbCallback
 
 import wandb
 from velmwheel_gym import *  # pylint: disable=wildcard-import, unused-wildcard-import
@@ -15,6 +15,35 @@ from velmwheel_rl.common import (
     get_model_save_path_and_tb_log_name,
     load_model,
 )
+
+
+def monitor_network(algorithm: str, model: BaseAlgorithm):
+    match algorithm:
+        case "PPO":
+            wandb.watch(model.policy, log="all")
+        case "TD3":
+            wandb.watch(
+                (
+                    model.policy.actor,
+                    model.policy.actor_target,
+                    model.policy.critic,
+                    model.policy.critic_target,
+                ),
+                log_freq=1,
+                log="all",
+            )
+        case "DDPG":
+            wandb.watch(
+                (
+                    model.policy.actor,
+                    model.policy.critic,
+                ),
+                log_freq=1,
+                log="all",
+            )
+        case _:
+            raise ValueError(f"Unsupported algorithm: {algorithm}")
+
 
 # ---------------------------------------------------------------------------- #
 #                                 Configuration                                #
@@ -83,7 +112,8 @@ run = wandb.init(
     sync_tensorboard=True,
 )
 
-wandb.watch(model.policy)
+if str(param_reader.read("monitor_network")) == "true":
+    monitor_network(algorithm, model)
 
 model.learn(
     total_timesteps=timesteps,

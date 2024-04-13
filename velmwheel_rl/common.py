@@ -81,7 +81,7 @@ def create_model(
     algorithm: str, env: gym.Env, param_reader: ParameterReader
 ) -> tuple[BaseAlgorithm, dict]:
     model_config = {
-        "gym_env": param_reader.read("gym_env"),
+        "env_id": param_reader.read("gym_env"),
         "algorithm": algorithm,
         "total_timesteps": int(param_reader.read("timesteps")),
         "policy_type": "MlpPolicy",
