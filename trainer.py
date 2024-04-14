@@ -1,4 +1,5 @@
 import configparser
+import signal
 
 import gymnasium as gym
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -111,6 +112,17 @@ run = wandb.init(
     config=model_config,
     sync_tensorboard=True,
 )
+
+
+def sigint_handler(sig, frame):
+    global model
+    if model:
+        del model
+    run.finish()
+    exit(0)
+
+
+signal.signal(signal.SIGINT, sigint_handler)
 
 if str(param_reader.read("monitor_network")) == "true":
     monitor_network(algorithm, model)
