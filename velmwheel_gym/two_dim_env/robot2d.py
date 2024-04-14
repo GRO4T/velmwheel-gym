@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from velmwheel_gym.constants import LIDAR_DATA_SIZE
+from velmwheel_gym.two_dim_env.lidar_2d import Lidar2D
 
 from .utils import *
 
@@ -39,6 +40,7 @@ class Robot2D:
 
         # Lidar parameters
         self.max_range = lidar_max_range
+        self._lidar = Lidar2D(self, 360, LIDAR_DATA_SIZE, lidar_max_range)
         self.xls = []
         self.yls = []
 
@@ -138,50 +140,7 @@ class Robot2D:
         return False
 
     def scanning(self):
-        xcs = self.env.xcs
-        ycs = self.env.ycs
-        rcs = self.env.rcs
-
-        r = self.max_range
-        self.xls = []
-        self.yls = []
-        touches = []
-        fov = np.deg2rad(360)
-        alphas = np.linspace(-fov / 2, fov / 2, LIDAR_DATA_SIZE)
-        for alpha in alphas:
-            self.xls.append(self.xr + r * np.cos(alpha + self.thr))
-            self.yls.append(self.yr + r * np.sin(alpha + self.thr))
-
-        for i, (xl, yl, alpha) in enumerate(zip(self.xls, self.yls, alphas)):
-            touch = False
-            for xc, yc, rc in zip(xcs, ycs, rcs):
-                is_inter, result = obtain_intersection_points(
-                    self.xr, self.yr, xl, yl, xc, yc, rc
-                )
-                if is_inter:
-                    cond = validate_point(
-                        result[0] - self.xr,
-                        result[1] - self.yr,
-                        self.xls[i] - self.xr,
-                        self.yls[i] - self.yr,
-                        self.thr + alpha,
-                        self.max_range,
-                    )
-                    if cond:
-                        touch = True
-                        self.xls[i] = result[0]
-                        self.yls[i] = result[1]
-            touches.append(touch)
-
-        for i, (x, y) in enumerate(zip(self.xls, self.yls)):
-            if x >= 5 or x <= -5 or y >= 5 or y <= -5:
-                touches[i] = True
-
-        xls = [max(min(x, 5.0), -5) for x in self.xls]
-        self.xls = np.array(xls)
-        yls = [max(min(x, 5.0), -5) for x in self.yls]
-        self.yls = np.array(yls)
-        return touches
+        return self._lidar.scan()
 
     def render(self):
         # If render enabled,
