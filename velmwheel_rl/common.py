@@ -40,7 +40,7 @@ def get_model_save_path_and_tb_log_name(
             f"{algorithm}_{os.path.basename(os.path.dirname(model_path))}",
         )
 
-    model_save_dir = f"./models/velmwheel_v1/{algorithm.lower()}"
+    model_save_dir = f"./models/{algorithm.lower()}"
     max_run_id = 1
     for filename in os.listdir(model_save_dir):
         try:
