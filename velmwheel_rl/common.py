@@ -93,6 +93,7 @@ def create_model(
             action_noise = OrnsteinUhlenbeckActionNoise(
                 mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
             )
+            policy_kwargs = dict(net_arch=dict(pi=[100, 75], qf=[100, 75]))
             model = DDPG(
                 "MlpPolicy",
                 env,
@@ -103,6 +104,7 @@ def create_model(
                 learning_rate=linear_schedule(0.001),
                 gamma=float(param_reader.read("gamma", "DDPG")),
                 buffer_size=int(param_reader.read("buffer_size", "DDPG")),
+                policy_kwargs=policy_kwargs,
             )
 
             model_config["action_noise"] = repr(action_noise)
@@ -176,18 +178,35 @@ def _load_replay_buffer(model: BaseAlgorithm, replay_buffer_path: str):
     print(f"Replay buffer loaded: {model.replay_buffer.size()} transitions")
 
 
+# pylint: disable=too-many-arguments
 def load_model(
     algorithm: str,
     env: gym.Env,
     param_reader: ParameterReader,
     model_path: str,
     replay_buffer_path: str,
-) -> BaseAlgorithm:
+    test_mode: bool = False,
+) -> tuple[BaseAlgorithm, dict]:
+    if not test_mode:
+        model_config = {
+            "env_id": param_reader.read("gym_env"),
+            "algorithm": algorithm,
+            "total_timesteps": int(param_reader.read("timesteps")),
+            "policy_type": "MlpPolicy",
+        }
+    else:
+        model_config = {}
+
     match algorithm:
         case "DDPG":
             model = DDPG.load(model_path, env=env)
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
+
+            model_config["action_noise"] = repr(model.action_noise)
+            model_config["learning_rate"] = repr(linear_schedule(0.001))
+            model_config["gamma"] = model.gamma
+            model_config["buffer_size"] = model.buffer_size
         case "TD3":
             model = TD3.load(model_path, env=env)
             if replay_buffer_path:
@@ -202,7 +221,7 @@ def load_model(
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
     print(model.policy)
-    return model
+    return model, model_config
 
 
 def bootstrap_argument_parser() -> argparse.ArgumentParser:

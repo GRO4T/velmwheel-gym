@@ -1,5 +1,7 @@
+# pylint: disable=redefined-outer-name, c-extension-no-member
 import configparser
 import signal
+import sys
 
 import gymnasium as gym
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -95,7 +97,9 @@ else:
     env = gym.make(gym_env, **extra_params)
 
 if model_path:
-    model = load_model(algorithm, env, param_reader, model_path, replay_buffer_path)
+    model, model_config = load_model(
+        algorithm, env, param_reader, model_path, replay_buffer_path
+    )
 else:
     model, model_config = create_model(algorithm, env, param_reader)
 
@@ -114,12 +118,13 @@ run = wandb.init(
 )
 
 
+# pylint: disable=unused-argument, global-statement
 def sigint_handler(sig, frame):
     global model
     if model:
         del model
     run.finish()
-    exit(0)
+    sys.exit(0)
 
 
 signal.signal(signal.SIGINT, sigint_handler)

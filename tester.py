@@ -47,7 +47,9 @@ env = gym.make(
     gym_env, min_goal_dist=goal_reached_threshold, real_time_factor=real_time_factor
 )
 
-model = load_model(algorithm, env, param_reader, model_path, replay_buffer_path)
+model, _ = load_model(
+    algorithm, env, param_reader, model_path, replay_buffer_path, test_mode=True
+)
 
 obs, _ = env.reset()
 
