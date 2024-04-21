@@ -93,7 +93,7 @@ def create_model(
             action_noise = OrnsteinUhlenbeckActionNoise(
                 mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
             )
-            policy_kwargs = dict(net_arch=dict(pi=[100, 75], qf=[100, 75]))
+            # policy_kwargs = dict(net_arch=dict(pi=[100, 75], qf=[100, 75]))
             model = DDPG(
                 "MlpPolicy",
                 env,
@@ -104,8 +104,11 @@ def create_model(
                 learning_rate=linear_schedule(0.001),
                 gamma=float(param_reader.read("gamma", "DDPG")),
                 buffer_size=int(param_reader.read("buffer_size", "DDPG")),
-                policy_kwargs=policy_kwargs,
+                # policy_kwargs=policy_kwargs,
             )
+
+            model.actor.optimizer.weight_decay = 0.1
+            model.critic.optimizer.weight_decay = 0.1
 
             model_config["action_noise"] = repr(action_noise)
             model_config["learning_rate"] = repr(linear_schedule(0.001))
