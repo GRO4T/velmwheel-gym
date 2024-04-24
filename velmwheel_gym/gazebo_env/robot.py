@@ -1,4 +1,5 @@
 import logging
+import math
 import time
 from typing import Optional
 
@@ -7,9 +8,10 @@ from gazebo_msgs.srv import SetEntityState
 from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped, Twist
 from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
 from scan_tools_msgs.srv import SetPose
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import PointCloud2
 from velmwheel_gazebo_msgs.msg import ContactState
 
+import ros2_numpy as rnp
 from velmwheel_gym.constants import BASE_STEP_TIME
 from velmwheel_gym.gazebo_env.ros_utils import call_service, create_ros_service_client
 from velmwheel_gym.types import Point
@@ -24,9 +26,7 @@ LASER_SCAN_MATCHER_SET_POSE_TOPIC = "/velmwheel/laser_scan_matcher/set_pose"
 NAVIGATION_INITIAL_POSE_TOPIC = "/initialpose"
 ENCODERS_SET_POSE_TOPIC = "/velmwheel/odom/encoders/set_pose"
 SET_ENTITY_STATE_TOPIC = "/set_entity_state"
-LIDAR_TOPIC = "/velmwheel/lidars/scan/combined"
-LIDAR_LEFT_TOPIC = "/velmwheel/lidar_l/scan"
-LIDAR_RIGHT_TOPIC = "/velmwheel/lidar_r/scan"
+LIDAR_TOPIC = "/velmwheel/lidars/cloud/combined"
 
 STALE_MEASUREMENT_TIMEOUT_SEC = 5
 STALE_MEASUREMENT_RECOVERY_TIMEOUT_SEC = 10
@@ -39,12 +39,9 @@ class VelmwheelRobot:
         self._is_collide: bool = False
         self._position: Optional[Point] = None
         self._position_tstamp: float = 0.0
-        self._lidar_left_data: Optional[list[float]] = None
-        self._lidar_left_tstamp: float = 0.0
-        self._lidar_left_max_range: Optional[float] = None
-        self._lidar_right_data: Optional[list[float]] = None
-        self._lidar_right_tstamp: float = 0.0
-        self._lidar_right_max_range: Optional[float] = None
+        self._lidar_data: Optional[list[float]] = None
+        self._lidar_tstamp: float = 0.0
+        self._lidar_max_range: Optional[float] = None
         self._simulation_time: Optional[int] = None
         self._real_time_factor: float = 1.0
         self._ignore_collisions_until: float = 0.0
@@ -97,16 +94,10 @@ class VelmwheelRobot:
             self._position_callback,
             qos_profile=qos_profile_system_default,
         )
-        self._lidar_left_sub = self._node.create_subscription(
-            LaserScan,
-            LIDAR_LEFT_TOPIC,
-            self._lidar_left_callback,
-            qos_profile=qos_profile_sensor_data,
-        )
-        self._lidar_right_sub = self._node.create_subscription(
-            LaserScan,
-            LIDAR_RIGHT_TOPIC,
-            self._lidar_right_callback,
+        self._lidar_sub = self._node.create_subscription(
+            PointCloud2,
+            LIDAR_TOPIC,
+            self._lidar_callback,
             qos_profile=qos_profile_sensor_data,
         )
 
@@ -125,46 +116,25 @@ class VelmwheelRobot:
         self._position_tstamp = value
 
     @property
-    def lidar_left_data(self) -> Optional[list[float]]:
+    def lidar_data(self) -> Optional[list[float]]:
         """LIDAR data."""
-        return self._lidar_left_data
+        return self._lidar_data
 
     @property
-    def lidar_right_data(self) -> Optional[list[float]]:
-        """LIDAR data."""
-        return self._lidar_right_data
-
-    @property
-    def normalized_lidar_left_data(self) -> Optional[list[float]]:
+    def normalized_lidar_data(self) -> Optional[list[float]]:
         """Normalized LIDAR data. Measurements are scaled to the range [0, 1]."""
-        if not self._lidar_left_data:
+        if not self._lidar_data:
             return None
-        return [x / self._lidar_left_max_range for x in self._lidar_left_data]
+        return [x / 20.0 for x in self._lidar_data]
 
     @property
-    def normalized_lidar_right_data(self) -> Optional[list[float]]:
-        """Normalized LIDAR data. Measurements are scaled to the range [0, 1]."""
-        if not self._lidar_right_data:
-            return None
-        return [x / self._lidar_right_max_range for x in self._lidar_right_data]
-
-    @property
-    def lidar_left_tstamp(self) -> float:
+    def lidar_tstamp(self) -> float:
         """Timestamp of the last received LIDAR data."""
-        return self._lidar_left_tstamp
+        return self._lidar_tstamp
 
-    @lidar_left_tstamp.setter
-    def lidar_left_tstamp(self, value: float):
-        self._lidar_left_tstamp = value
-
-    @property
-    def lidar_right_tstamp(self) -> float:
-        """Timestamp of the last received LIDAR data."""
-        return self._lidar_right_tstamp
-
-    @lidar_right_tstamp.setter
-    def lidar_right_tstamp(self, value: float):
-        self._lidar_right_tstamp = value
+    @lidar_tstamp.setter
+    def lidar_tstamp(self, value: float):
+        self._lidar_tstamp = value
 
     @property
     def is_collide(self) -> bool:
@@ -188,8 +158,7 @@ class VelmwheelRobot:
         self._ignore_collisions_until = time.time() + 1
         self._is_collide = False
         self._position = None
-        self._lidar_left_data = None
-        self._lidar_right_data = None
+        self._lidar_data = None
 
         while self._simulation_time is None:
             rclpy.spin_once(self._node, timeout_sec=1.0)
@@ -201,11 +170,7 @@ class VelmwheelRobot:
         self._set_laser_scan_matcher_pose(starting_position)
         self._set_encoders_pose(starting_position)
 
-        while (
-            self._position is None
-            or self._lidar_left_data is None
-            or self._lidar_right_data is None
-        ):
+        while self._position is None or self._lidar_data is None:
             rclpy.spin_once(self._node, timeout_sec=1.0)
             if time.time() - start > timeout_sec:
                 logger.warning("Failed to reset robot's state")
@@ -218,11 +183,10 @@ class VelmwheelRobot:
         current_time = time.time()
         if (
             current_time - self._position_tstamp > STALE_MEASUREMENT_TIMEOUT_SEC
-            or current_time - self._lidar_left_tstamp > STALE_MEASUREMENT_TIMEOUT_SEC
-            or current_time - self._lidar_right_tstamp > STALE_MEASUREMENT_TIMEOUT_SEC
+            or current_time - self._lidar_tstamp > STALE_MEASUREMENT_TIMEOUT_SEC
         ):
             logger.warning(
-                f"Stale measurements {current_time=} {self._position_tstamp=} {self._lidar_left_tstamp=} {self._lidar_right_tstamp=}."
+                f"Stale measurements {current_time=} {self._position_tstamp=} {self._lidar_tstamp=}"
             )
             return self._stale_measurement_recovery()
         return True
@@ -245,14 +209,12 @@ class VelmwheelRobot:
         self.stop()
         start = time.time()
         self._position = None
-        self._lidar_left_data = None
-        self._lidar_right_data = None
+        self._lidar_data = None
         self._simulation_time = None
 
         while (
             self._position is None
-            or self._lidar_left_data is None
-            or self._lidar_right_data is None
+            or self._lidar_data is None
             or self._simulation_time is None
         ):
             rclpy.spin_once(self._node, timeout_sec=1.0)
@@ -275,29 +237,14 @@ class VelmwheelRobot:
         self._position = Point(x=p.x, y=p.y)
         self._position_tstamp = time.time()
 
-    def _lidar_left_callback(self, message: LaserScan):
-        self._lidar_left_max_range = message.range_max
-        self._lidar_left_data = [
-            max(message.range_min, min(message.range_max, x)) for x in message.ranges
-        ]
+    def _lidar_callback(self, message: PointCloud2):
+        self._lidar_data = []
+        for point in rnp.numpify(message)[::12]:
+            x, y, _, _ = point
+            r = math.dist(self.position, (x, y))
+            self._lidar_data.append(min(r, 20.0))
 
-        # NOTE: transforming from 541 measurements to 90
-        # TODO: make it more generic
-        self._lidar_left_data = self._lidar_left_data[::6]
-
-        self._lidar_left_tstamp = time.time()
-
-    def _lidar_right_callback(self, message: LaserScan):
-        self._lidar_right_max_range = message.range_max
-        self._lidar_right_data = [
-            max(message.range_min, min(message.range_max, x)) for x in message.ranges
-        ]
-
-        # NOTE: transforming from 541 measurements to 90
-        # TODO: make it more generic
-        self._lidar_right_data = self._lidar_right_data[::6]
-
-        self._lidar_right_tstamp = time.time()
+        self._lidar_tstamp = time.time()
 
     def _publish_navigation_initial_pose(self):
         initial_pose = PoseWithCovarianceStamped()

@@ -57,7 +57,7 @@ class VelmwheelEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + 2 * LIDAR_DATA_SIZE,),
+            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
             dtype=np.float64,
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
@@ -269,8 +269,7 @@ class VelmwheelEnv(gym.Env):
         # normalize position and goal coordinates
         obs = [o / COORDINATES_NORMALIZATION_FACTOR for o in obs]
 
-        obs.extend(self._robot.normalized_lidar_left_data)
-        obs.extend(self._robot.normalized_lidar_right_data)
+        obs.extend(self._robot.normalized_lidar_data)
 
         return np.array(obs)
 
