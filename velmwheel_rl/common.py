@@ -93,7 +93,10 @@ def create_model(
             action_noise = OrnsteinUhlenbeckActionNoise(
                 mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
             )
-            # policy_kwargs = dict(net_arch=dict(pi=[100, 75], qf=[100, 75]))
+            # policy_kwargs = dict(
+            #     net_arch=dict(pi=[400, 300], qf=[400, 300]),
+            #     optimizer_kwargs=dict(actor=dict(lr=0.01), critic=dict(lr=0.001)),
+            # )
             model = DDPG(
                 "MlpPolicy",
                 env,
@@ -101,14 +104,16 @@ def create_model(
                 action_noise=action_noise,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                learning_rate=linear_schedule(0.001),
                 gamma=float(param_reader.read("gamma", "DDPG")),
                 buffer_size=int(param_reader.read("buffer_size", "DDPG")),
                 # policy_kwargs=policy_kwargs,
             )
 
-            model.actor.optimizer.weight_decay = 0.1
-            model.critic.optimizer.weight_decay = 0.1
+            model.actor.optimizer.weight_decay = 0.01
+            model.critic.optimizer.weight_decay = 0.01
+
+            model.actor.optimizer.lr = 0.001
+            model.critic.optimizer.lr = 0.01
 
             model_config["action_noise"] = repr(action_noise)
             model_config["learning_rate"] = repr(linear_schedule(0.001))
@@ -205,6 +210,9 @@ def load_model(
             model = DDPG.load(model_path, env=env)
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
+
+            model.actor.optimizer.weight_decay = 0.01
+            model.critic.optimizer.weight_decay = 0.01
 
             model_config["action_noise"] = repr(model.action_noise)
             model_config["learning_rate"] = repr(linear_schedule(0.001))
