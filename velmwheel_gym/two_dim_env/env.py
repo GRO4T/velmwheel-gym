@@ -90,7 +90,7 @@ class Robot2dEnv(gym.Env):
         # convert LIDAR touches to ranges
         ranges = []
         for xl, yl in zip(xls, yls):
-            ranges.append(np.linalg.norm([xl, yl]))
+            ranges.append(math.dist(self.robot_position, (xl, yl)))
         # clamp and normalize LIDAR ranges
         ranges = [min(r, self.robot.max_range) / self.robot.max_range for r in ranges]
 
