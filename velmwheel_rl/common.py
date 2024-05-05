@@ -7,7 +7,8 @@ import gymnasium as gym
 import numpy as np
 from stable_baselines3 import DDPG, PPO, SAC, TD3
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.noise import OrnsteinUhlenbeckActionNoise
+
+from velmwheel_rl.noise import OrnsteinUhlenbeckActionNoiseWithDecay
 
 
 class ParameterReader:
@@ -90,12 +91,11 @@ def create_model(
     match algorithm:
         case "DDPG":
             n_actions = env.action_space.shape[-1]
-            action_noise = OrnsteinUhlenbeckActionNoise(
-                mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
+            action_noise = OrnsteinUhlenbeckActionNoiseWithDecay(
+                mean=np.zeros(n_actions), sigma=0.5 * np.ones(n_actions), decay=0.998
             )
             # policy_kwargs = dict(
-            #     net_arch=dict(pi=[400, 300], qf=[400, 300]),
-            #     optimizer_kwargs=dict(actor=dict(lr=0.01), critic=dict(lr=0.001)),
+            #     net_arch=dict(pi=[400, 300], qf=[200, 150]),
             # )
             model = DDPG(
                 "MlpPolicy",
@@ -106,22 +106,29 @@ def create_model(
                 device="cuda",
                 gamma=float(param_reader.read("gamma", "DDPG")),
                 buffer_size=int(param_reader.read("buffer_size", "DDPG")),
+                batch_size=int(param_reader.read("batch_size", "DDPG")),
+                learning_starts=int(param_reader.read("learning_starts", "DDPG")),
                 # policy_kwargs=policy_kwargs,
             )
 
             model.actor.optimizer.weight_decay = 0.01
             model.critic.optimizer.weight_decay = 0.01
 
-            model.actor.optimizer.lr = 0.001
-            model.critic.optimizer.lr = 0.01
+            model.actor.optimizer.lr = float(param_reader.read("actor_lr", "DDPG"))
+            model.critic.optimizer.lr = float(param_reader.read("critic_lr", "DDPG"))
 
+            model_config["learning_starts"] = int(
+                param_reader.read("learning_starts", "DDPG")
+            )
             model_config["action_noise"] = repr(action_noise)
-            model_config["learning_rate"] = repr(linear_schedule(0.001))
             model_config["gamma"] = float(param_reader.read("gamma", "DDPG"))
             model_config["buffer_size"] = int(param_reader.read("buffer_size", "DDPG"))
+            model_config["batch_size"] = int(param_reader.read("batch_size", "DDPG"))
+            model_config["actor_lr"] = float(param_reader.read("actor_lr", "DDPG"))
+            model_config["critic_lr"] = float(param_reader.read("critic_lr", "DDPG"))
         case "TD3":
             n_actions = env.action_space.shape[-1]
-            action_noise = OrnsteinUhlenbeckActionNoise(
+            action_noise = OrnsteinUhlenbeckActionNoiseWithDecay(
                 mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
             )
             policy_kwargs = dict(net_arch=dict(pi=[800, 600, 600], qf=[800, 600, 600]))
