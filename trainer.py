@@ -61,6 +61,9 @@ parser.add_argument(
     required=False,
     default=1,
 )
+parser.add_argument(
+    "--save_freq", type=int, help="Frequency of saving the model", required=False
+)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -104,7 +107,7 @@ else:
     model, model_config = create_model(algorithm, env, param_reader)
 
 checkpoint_callback = CheckpointCallback(
-    save_freq=20000,
+    save_freq=int(param_reader.read("save_freq")),
     save_path=model_save_path,
     name_prefix=algorithm.lower(),
     save_replay_buffer=True,
