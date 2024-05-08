@@ -1,7 +1,7 @@
 """ Based on: https://github.com/EmanuelSamir/simple-2d-robot-lidar-env/blob/main/gym_robot2d/envs/robot2d_env.py """
 
-import math
 import logging
+import math
 
 import gymnasium as gym
 import numpy as np
@@ -11,6 +11,8 @@ from velmwheel_gym.constants import (
     GLOBAL_GUIDANCE_OBSERVATION_POINTS,
     LIDAR_DATA_SIZE,
 )
+from velmwheel_gym.global_guidance_path import get_n_points_evenly_spaced_on_path
+from velmwheel_gym.reward import calculate_reward
 from velmwheel_gym.types import Point
 
 from .robot2d import Robot2D
@@ -97,44 +99,50 @@ class Robot2dEnv(gym.Env):
         # clamp and normalize LIDAR ranges
         ranges = [min(r, self.robot.max_range) / self.robot.max_range for r in ranges]
 
-        position_normalized = self.robot_position / COORDINATES_NORMALIZATION_FACTOR
-        goal_normalized = self.robot_goal / COORDINATES_NORMALIZATION_FACTOR
-        empty_global_guidace = np.zeros(
-            2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS
-        )  # NOTE: At the moment global planner is not implemented
+        obs = [
+            self.robot_position[0],
+            self.robot_position[1],
+            self.goal.x,
+            self.goal.y,
+        ]
 
-        return np.concatenate(
-            (position_normalized, goal_normalized, empty_global_guidace, ranges)
+        obs.extend(
+            get_n_points_evenly_spaced_on_path(
+                self.robot._global_guidance_path, 10, [self.goal.x, self.goal.y]
+            )
         )
 
+        # normalize position and goal coordinates
+        obs = [o / COORDINATES_NORMALIZATION_FACTOR for o in obs]
+
+        obs.extend(ranges)
+
+        return np.array(obs)
+
     def step(self, action):
+        self.steps += 1
         # State Update
         vx = ACTION_NORMALIZATION_FACTOR * action[0]
         vy = ACTION_NORMALIZATION_FACTOR * action[1]
         w = 0.0
 
         self.robot.step(vx, vy, w)
+        num_passed_points = self.robot._global_guidance_path.update(
+            Point(*self.robot_position)
+        )
 
-        terminated = False
-        reward = 0.0
+        reward, terminated = calculate_reward(
+            Point(*self.robot_position),
+            self.goal,
+            self.robot.is_crashed(),
+            1.0,
+            num_passed_points,
+            self.robot._global_guidance_path,
+            self.max_episode_steps,
+            self.steps,
+        )
 
         goal_distance = math.dist(self.robot_position, self.robot_goal)
-
-        if self.robot.is_crashed():
-            reward = -1.0
-            terminated = True
-        else:
-            if goal_distance < 1.0:
-                reward = 1.0 - 0.1 * self.steps / self.max_episode_steps
-                terminated = True
-            else:
-                goal_closeness_factor = (
-                    1
-                    - math.dist(self.robot_position, self.robot_goal)
-                    / COORDINATES_NORMALIZATION_FACTOR
-                )
-                reward = goal_closeness_factor * 0.1 / self.max_episode_steps
-                self.steps += 1
 
         obs = self._observe()
 

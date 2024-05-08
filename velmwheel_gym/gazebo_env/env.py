@@ -17,15 +17,16 @@ from velmwheel_gym.constants import (
     GLOBAL_GUIDANCE_OBSERVATION_POINTS,
     LIDAR_DATA_SIZE,
 )
-from velmwheel_gym.gazebo_env.global_guidance_path import (
-    POINT_REACHED_THRESHOLD,
-    GlobalGuidancePath,
-)
 from velmwheel_gym.gazebo_env.robot import VelmwheelRobot
 from velmwheel_gym.gazebo_env.ros_utils import call_service, create_ros_service_client
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
 )
+from velmwheel_gym.global_guidance_path import (
+    GlobalGuidancePath,
+    get_n_points_evenly_spaced_on_path,
+)
+from velmwheel_gym.reward import calculate_reward
 from velmwheel_gym.types import Point
 
 logger = logging.getLogger(__name__)
@@ -39,11 +40,6 @@ GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 
 WAIT_FOR_NEW_PATH_TIMEOUT_SEC = 15
 MAP_FRAME_POSITION_ERROR_TOLERANCE = 0.5
-
-COLLISION_PENALTY = -0.9
-DETOUR_PENALTY = -0.1
-SUCCESS_REWARD = 0.5
-PATH_FOLLOWING_REWARD = 0.5
 
 
 class VelmwheelEnv(gym.Env):
@@ -174,14 +170,32 @@ class VelmwheelEnv(gym.Env):
 
         obs = self._observe()
 
-        dist_to_goal = math.dist(self.goal, self._robot.position)
         num_passed_points = self._global_guidance_path.update(self._robot.position)
 
-        reward, terminated = self._calculate_reward(dist_to_goal, num_passed_points)
+        reward, terminated = calculate_reward(
+            self._robot.position,
+            self.goal,
+            self._robot.is_collide,
+            self._min_goal_dist,
+            num_passed_points,
+            self._global_guidance_path,
+            self.max_episode_steps,
+            self._steps,
+        )
         self._episode_reward += reward
 
+        if terminated:
+            if self._robot.is_collide:
+                logger.debug("FAILURE: Robot collided with an obstacle")
+                # After collision, we should use the navigation stack to get a new path,
+                # so we will be able to detect if collision has broken odom -> map frame transformation.
+                self._use_cache = False
+            else:
+                logger.debug(f"SUCCESS: Robot reached goal at {self.goal=}")
+                self._start_position_and_goal_generator.register_goal_reached()
+
         logger.trace(
-            f"episode_reward={self._episode_reward} {reward=} {dist_to_goal=} goal={self.goal} position={self._robot.position} current_time={time.time()} position_tstamp={self._robot.position_tstamp} lidar_tstamp={self._robot.lidar_tstamp}"
+            f"episode_reward={self._episode_reward} {reward=} dist_to_goal={self.goal.dist(self._robot.position)} goal={self.goal} position={self._robot.position} current_time={time.time()} position_tstamp={self._robot.position_tstamp} lidar_tstamp={self._robot.lidar_tstamp}"
         )
 
         end = time.time()
@@ -249,22 +263,11 @@ class VelmwheelEnv(gym.Env):
 
         obs = [position.x, position.y, self.goal.x, self.goal.y]
 
-        if self._global_guidance_path.points:
-            # extract 10 points evenly space along the global guidance path
-            for i in range(GLOBAL_GUIDANCE_OBSERVATION_POINTS):
-                idx = int(
-                    (i / GLOBAL_GUIDANCE_OBSERVATION_POINTS)
-                    * len(self._global_guidance_path.points)
-                )
-                obs.extend(
-                    [
-                        self._global_guidance_path.points[idx].x,
-                        self._global_guidance_path.points[idx].y,
-                    ]
-                )
-        else:
-            logger.warning("No global guidance path points")
-            obs.extend(10 * [self.goal.x, self.goal.y])
+        obs.extend(
+            get_n_points_evenly_spaced_on_path(
+                self._global_guidance_path, 10, [self.goal.x, self.goal.y]
+            )
+        )
 
         # normalize position and goal coordinates
         obs = [o / COORDINATES_NORMALIZATION_FACTOR for o in obs]
@@ -272,58 +275,6 @@ class VelmwheelEnv(gym.Env):
         obs.extend(self._robot.normalized_lidar_data)
 
         return np.array(obs)
-
-    def _calculate_reward(
-        self, dist_to_goal: float, num_passed_points: int
-    ) -> tuple[float, bool]:
-        if self._robot.is_collide:
-            logger.debug("FAILURE: Robot collided with an obstacle")
-            # After collision, we should use the navigation stack to get a new path,
-            # so we will be able to detect if collision has broken odom -> map frame transformation.
-            self._use_cache = False
-            return self._calculate_collision_penalty(), True
-
-        if self._is_goal_reached(dist_to_goal):
-            logger.debug(f"SUCCESS: Robot reached goal at {self.goal=}")
-            self._start_position_and_goal_generator.register_goal_reached()
-            return SUCCESS_REWARD, True
-
-        if num_passed_points > 0:
-            return (
-                self._calculate_global_guidance_following_reward(num_passed_points),
-                False,
-            )
-
-        if self._is_detoured_from_global_guidance_path():
-            return DETOUR_PENALTY / self.max_episode_steps, False
-
-        return 0.0, False
-
-    def _calculate_collision_penalty(self) -> float:
-        remaining_detour_penalty = (
-            (self.max_episode_steps - self._steps)
-            * DETOUR_PENALTY
-            / self.max_episode_steps
-        )
-        return COLLISION_PENALTY + remaining_detour_penalty
-
-    def _is_goal_reached(self, dist_to_goal: float) -> bool:
-        return dist_to_goal < self._min_goal_dist
-
-    def _is_detoured_from_global_guidance_path(self) -> bool:
-        if not self._global_guidance_path.points:
-            return False
-        return (
-            self._global_guidance_path.points[0].dist(self._robot.position)
-            >= POINT_REACHED_THRESHOLD
-        )
-
-    def _calculate_global_guidance_following_reward(
-        self, num_passed_points: int
-    ) -> float:
-        return PATH_FOLLOWING_REWARD * (
-            num_passed_points / self._global_guidance_path.original_num_points
-        )
 
     def _publish_goal(self):
         goal = PoseStamped()

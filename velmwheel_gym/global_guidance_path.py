@@ -1,11 +1,12 @@
 import logging
 
+from velmwheel_gym.constants import (
+    GLOBAL_GUIDANCE_OBSERVATION_POINTS,
+    POINT_REACHED_THRESHOLD,
+)
 from velmwheel_gym.types import Point
 
 logger = logging.getLogger(__name__)
-
-
-POINT_REACHED_THRESHOLD = 0.5  # meters
 
 
 class GlobalGuidancePath:
@@ -35,3 +36,23 @@ class GlobalGuidancePath:
             self._points = self._points[last_passed_point + 1 :]
             return last_passed_point + 1
         return 0
+
+
+def get_n_points_evenly_spaced_on_path(
+    global_guidance_path: GlobalGuidancePath, n: int, default_point: list[float]
+) -> list[float]:
+    if not global_guidance_path.points:
+        return n * default_point
+
+    evenly_spaced_points = []
+    for i in range(GLOBAL_GUIDANCE_OBSERVATION_POINTS):
+        idx = int(
+            (i / GLOBAL_GUIDANCE_OBSERVATION_POINTS) * len(global_guidance_path.points)
+        )
+        evenly_spaced_points.extend(
+            [
+                global_guidance_path.points[idx].x,
+                global_guidance_path.points[idx].y,
+            ]
+        )
+    return evenly_spaced_points

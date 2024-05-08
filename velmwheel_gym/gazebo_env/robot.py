@@ -11,7 +11,7 @@ from scan_tools_msgs.srv import SetPose
 from sensor_msgs.msg import PointCloud2
 from velmwheel_gazebo_msgs.msg import ContactState
 
-import ros2_numpy as rnp
+from ros2_numpy.point_cloud2 import pointcloud2_to_array
 from velmwheel_gym.constants import BASE_STEP_TIME
 from velmwheel_gym.gazebo_env.ros_utils import call_service, create_ros_service_client
 from velmwheel_gym.types import Point
@@ -239,7 +239,7 @@ class VelmwheelRobot:
 
     def _lidar_callback(self, message: PointCloud2):
         self._lidar_data = []
-        for point in rnp.numpify(message)[::12]:
+        for point in pointcloud2_to_array(message)[::12]:
             x, y, _, _ = point
             r = math.dist(self.position, (x, y))
             self._lidar_data.append(min(r, 20.0))

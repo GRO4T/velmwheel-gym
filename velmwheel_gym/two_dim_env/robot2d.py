@@ -4,7 +4,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from velmwheel_gym.constants import LIDAR_DATA_SIZE
+from velmwheel_gym.global_guidance_path import GlobalGuidancePath
 from velmwheel_gym.two_dim_env.lidar_2d import Lidar2D
+from velmwheel_gym.two_dim_env.planner import potential_field_planning
+from velmwheel_gym.types import Point
 
 from .utils import *
 
@@ -51,6 +54,8 @@ class Robot2D:
         self.ax = None
         self.first_render = True
 
+        self._global_guidance_path: GlobalGuidancePath = None
+
     def reset(self):
         self.xr = np.random.uniform(
             low=self.env_min_size + self.rr, high=self.env_max_size - self.rr
@@ -70,6 +75,21 @@ class Robot2D:
         )
         self.xls = []
         self.yls = []
+
+        grid_size = 0.5  # potential grid size [m]
+        robot_radius = 1.0  # robot radius [m]
+        px, py = potential_field_planning(
+            self.xr,
+            self.yr,
+            self.xg,
+            self.yg,
+            self.env.xcs,
+            self.env.ycs,
+            grid_size,
+            robot_radius,
+        )
+        points = [Point(x, y) for x, y in zip(px, py)]
+        self._global_guidance_path = GlobalGuidancePath(Point(self.xr, self.yr), points)
 
     def set_init_state(self, x0, y0, th0=0):
         self.xr = x0
@@ -197,6 +217,10 @@ class Robot2D:
             for xl, yl in zip(self.xls, self.yls):
                 self.ax.plot([self.xr, xl], [self.yr, yl], color="gray")
 
+            px = [p.x for p in self._global_guidance_path.points]
+            py = [p.y for p in self._global_guidance_path.points]
+            plt.plot(px, py, ".g")
+
             plt.pause(0.02)
             self.fig.canvas.draw()
 
@@ -289,7 +313,7 @@ class Environment:
         return px, py
 
     def get_random_obstacles(
-        self, xr, yr, rr, is_goal=False, xg=0, yg=0, rg=0, n=5, r=0.3
+        self, xr, yr, rr, is_goal=False, xg=0, yg=0, rg=0, n=15, r=0.3
     ):
         xcs = []
         ycs = []
