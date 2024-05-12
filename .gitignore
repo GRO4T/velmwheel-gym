@@ -3,7 +3,7 @@
 *.pyc
 *.stats
 *.swp
-config.ini.[0-9]
+config.ini[0-9A-Za-z_.]*
 venv/
 .vscode/
 .idea/
