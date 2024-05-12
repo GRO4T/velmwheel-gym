@@ -107,22 +107,29 @@ if model_path:
 else:
     model, model_config = create_model(algorithm, env, param_reader)
 
-checkpoint_callback = CheckpointCallback(
-    save_freq=int(param_reader.read("save_freq")),
-    save_path=model_save_path,
-    name_prefix=algorithm.lower(),
-    save_replay_buffer=True,
-    save_vecnormalize=True,
+callbacks = []
+
+callbacks.append(
+    CheckpointCallback(
+        save_freq=int(param_reader.read("save_freq")),
+        save_path=model_save_path,
+        name_prefix=algorithm.lower(),
+        save_replay_buffer=True,
+        save_vecnormalize=True,
+    )
 )
 
-eval_env = gym.make(gym_env, **extra_params)
-eval_callback = EvalCallback(
-    eval_env,
-    best_model_save_path=os.path.join(model_save_path, "best"),
-    eval_freq=10000,
-    deterministic=True,
-    render=False,
-)
+if "2D" in gym_env:
+    eval_env = gym.make(gym_env, **extra_params)
+    callbacks.append(
+        EvalCallback(
+            eval_env,
+            best_model_save_path=os.path.join(model_save_path, "best"),
+            eval_freq=10000,
+            deterministic=True,
+            render=False,
+        )
+    )
 
 run = wandb.init(
     project="velmwheel",
@@ -148,7 +155,7 @@ if str(param_reader.read("monitor_network")) == "true":
 model.learn(
     total_timesteps=timesteps,
     progress_bar=True,
-    callback=[checkpoint_callback, eval_callback],
+    callback=callbacks,
     tb_log_name=tb_log_name,
     reset_num_timesteps=False,
 )

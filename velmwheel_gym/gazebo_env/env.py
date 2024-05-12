@@ -213,7 +213,7 @@ class VelmwheelEnv(gym.Env):
         self._episode_reward = 0.0
         call_service(self._reset_world_srv)
 
-        if "goal" in options and "starting_position" in options:
+        if options and "goal" in options and "starting_position" in options:
             self._start_position_and_goal_generator.set(
                 options["starting_position"], options["goal"]
             )
