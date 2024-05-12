@@ -1,11 +1,12 @@
 # pylint: disable=redefined-outer-name, c-extension-no-member
 import configparser
+import os
 import signal
 import sys
 
 import gymnasium as gym
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
 
 import wandb
@@ -114,6 +115,15 @@ checkpoint_callback = CheckpointCallback(
     save_vecnormalize=True,
 )
 
+eval_env = gym.make(gym_env, **extra_params)
+eval_callback = EvalCallback(
+    eval_env,
+    best_model_save_path=os.path.join(model_save_path, "best"),
+    eval_freq=10000,
+    deterministic=True,
+    render=False,
+)
+
 run = wandb.init(
     project="velmwheel",
     config=model_config,
@@ -138,7 +148,7 @@ if str(param_reader.read("monitor_network")) == "true":
 model.learn(
     total_timesteps=timesteps,
     progress_bar=True,
-    callback=checkpoint_callback,
+    callback=[checkpoint_callback, eval_callback],
     tb_log_name=tb_log_name,
     reset_num_timesteps=False,
 )
