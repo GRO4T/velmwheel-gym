@@ -1,7 +1,6 @@
 import logging
 
 from velmwheel_gym.constants import POINT_REACHED_THRESHOLD
-from velmwheel_gym.gazebo_env.robot import VelmwheelRobot
 from velmwheel_gym.global_guidance_path import GlobalGuidancePath
 from velmwheel_gym.types import Point
 
@@ -14,6 +13,7 @@ SUCCESS_REWARD = 0.5
 PATH_FOLLOWING_REWARD = 0.5
 
 
+# pylint: disable=too-many-arguments
 def calculate_reward(
     robot_position: Point,
     goal: Point,
@@ -55,7 +55,12 @@ def calculate_reward(
         return COLLISION_PENALTY + remaining_detour_penalty, True
 
     if robot_position.dist(goal) < goal_reached_threshold:
-        return SUCCESS_REWARD, True
+        global_guidance_left_reward = (
+            PATH_FOLLOWING_REWARD
+            * len(global_guidance_path.points)
+            / global_guidance_path.original_num_points
+        )
+        return SUCCESS_REWARD + global_guidance_left_reward, True
 
     if num_passed_points > 0:
         return (
