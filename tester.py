@@ -51,7 +51,12 @@ model, _ = load_model(
     algorithm, env, param_reader, model_path, replay_buffer_path, test_mode=True
 )
 
-obs, _ = env.reset()
+obs, _ = env.reset(
+    options={
+        "starting_position": starting_position,
+        "goal": Point(goal_x, goal_y),
+    }
+)
 
 while True:
     action, _ = model.predict(obs, deterministic=True)

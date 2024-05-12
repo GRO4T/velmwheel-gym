@@ -81,13 +81,6 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
 def create_model(
     algorithm: str, env: gym.Env, param_reader: ParameterReader
 ) -> tuple[BaseAlgorithm, dict]:
-    model_config = {
-        "env_id": param_reader.read("gym_env"),
-        "algorithm": algorithm,
-        "total_timesteps": int(param_reader.read("timesteps")),
-        "policy_type": "MlpPolicy",
-    }
-
     match algorithm:
         case "DDPG":
             n_actions = env.action_space.shape[-1]
@@ -121,16 +114,6 @@ def create_model(
 
             model.actor.optimizer.lr = float(param_reader.read("actor_lr", "DDPG"))
             model.critic.optimizer.lr = float(param_reader.read("critic_lr", "DDPG"))
-
-            model_config["learning_starts"] = int(
-                param_reader.read("learning_starts", "DDPG")
-            )
-            model_config["action_noise"] = repr(action_noise)
-            model_config["gamma"] = float(param_reader.read("gamma", "DDPG"))
-            model_config["buffer_size"] = int(param_reader.read("buffer_size", "DDPG"))
-            model_config["batch_size"] = int(param_reader.read("batch_size", "DDPG"))
-            model_config["actor_lr"] = float(param_reader.read("actor_lr", "DDPG"))
-            model_config["critic_lr"] = float(param_reader.read("critic_lr", "DDPG"))
         case "TD3":
             n_actions = env.action_space.shape[-1]
             action_noise = OrnsteinUhlenbeckActionNoiseWithDecay(
@@ -161,17 +144,6 @@ def create_model(
 
             model.actor.optimizer.lr = float(param_reader.read("actor_lr", "TD3"))
             model.critic.optimizer.lr = float(param_reader.read("critic_lr", "TD3"))
-
-            model_config["learning_starts"] = int(
-                param_reader.read("learning_starts", "TD3")
-            )
-            model_config["action_noise"] = repr(action_noise)
-            model_config["learning_rate"] = repr(linear_schedule(0.001))
-            model_config["gamma"] = float(param_reader.read("gamma", "TD3"))
-            model_config["buffer_size"] = int(param_reader.read("buffer_size", "TD3"))
-            model_config["batch_size"] = int(param_reader.read("batch_size", "TD3"))
-            # model_config["policy_kwargs"] = repr(policy_kwargs)
-            model_config["learning_starts"] = 100
         case "PPO":
             # policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))
             model = PPO(
@@ -184,8 +156,6 @@ def create_model(
                 gamma=float(param_reader.read("gamma", "PPO")),
                 # n_steps=4096,
             )
-
-            model_config["gamma"] = float(param_reader.read("gamma", "PPO"))
         case "SAC":
             model = SAC(
                 "MlpPolicy",
@@ -197,8 +167,33 @@ def create_model(
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
+    wb_run_params = _get_wb_run_params(model, param_reader)
+
     print(model.policy)
-    return model, model_config
+    return model, wb_run_params
+
+
+def _get_wb_run_params(model: BaseAlgorithm, param_reader: ParameterReader) -> dict:
+    algorithm = param_reader.read("algorithm")
+
+    wb_run_params = {
+        "env_id": param_reader.read("gym_env"),
+        "algorithm": algorithm,
+        "total_timesteps": int(param_reader.read("timesteps")),
+        "policy_type": "MlpPolicy",
+    }
+
+    match algorithm:
+        case "DDPG" | "TD3":
+            wb_run_params["learning_starts"] = model.learning_starts
+            wb_run_params["action_noise"] = repr(model.action_noise)
+            wb_run_params["gamma"] = model.gamma
+            wb_run_params["buffer_size"] = model.buffer_size
+            wb_run_params["batch_size"] = model.batch_size
+            wb_run_params["actor_lr"] = param_reader.read("actor_lr", algorithm)
+            wb_run_params["critic_lr"] = param_reader.read("critic_lr", algorithm)
+
+    return wb_run_params
 
 
 def _load_replay_buffer(model: BaseAlgorithm, replay_buffer_path: str):
@@ -215,29 +210,11 @@ def load_model(
     replay_buffer_path: str,
     test_mode: bool = False,
 ) -> tuple[BaseAlgorithm, dict]:
-    if not test_mode:
-        model_config = {
-            "env_id": param_reader.read("gym_env"),
-            "algorithm": algorithm,
-            "total_timesteps": int(param_reader.read("timesteps")),
-            "policy_type": "MlpPolicy",
-        }
-    else:
-        model_config = {}
-
     match algorithm:
         case "DDPG":
             model = DDPG.load(model_path, env=env)
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
-
-            model.actor.optimizer.weight_decay = 0.01
-            model.critic.optimizer.weight_decay = 0.01
-
-            model_config["action_noise"] = repr(model.action_noise)
-            model_config["learning_rate"] = repr(linear_schedule(0.001))
-            model_config["gamma"] = model.gamma
-            model_config["buffer_size"] = model.buffer_size
         case "TD3":
             model = TD3.load(model_path, env=env)
             if replay_buffer_path:
@@ -251,8 +228,13 @@ def load_model(
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
+    if not test_mode:
+        wb_run_params = _get_wb_run_params(model, param_reader)
+    else:
+        wb_run_params = {}
+
     print(model.policy)
-    return model, model_config
+    return model, wb_run_params
 
 
 def bootstrap_argument_parser() -> argparse.ArgumentParser:

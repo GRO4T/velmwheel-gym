@@ -238,6 +238,9 @@ class VelmwheelRobot:
         self._position_tstamp = time.time()
 
     def _lidar_callback(self, message: PointCloud2):
+        if not self.position:
+            logger.warning("Position is not set yet")
+            return
         self._lidar_data = []
         for point in pointcloud2_to_array(message)[::12]:
             x, y, _, _ = point
