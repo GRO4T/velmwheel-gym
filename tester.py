@@ -77,14 +77,16 @@ while True:
     env.render()
 
     if dist_to_goal < goal_reached_threshold:
-        env.env._robot.move([0.0, 0.0])  # pylint: disable=protected-access
+        env.reset()
         value = input("Next goal? (y/n): ")
         if value.lower() == "n":
             subprocess.run("./kill_sim.sh", shell=True, check=True)
             break
         goal_x = float(input("Goal x: "))
         goal_y = float(input("Goal y: "))
-        goal = [goal_x, goal_y]
-        # pylint: disable=protected-access
-        env.env._start_position_and_goal_generator.set(starting_position, Point(*goal))
-        obs = env.reset()
+        obs, _ = env.reset(
+            options={
+                "starting_position": starting_position,
+                "goal": Point(goal_x, goal_y),
+            }
+        )
