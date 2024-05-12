@@ -92,7 +92,12 @@ def create_model(
         case "DDPG":
             n_actions = env.action_space.shape[-1]
             action_noise = OrnsteinUhlenbeckActionNoiseWithDecay(
-                mean=np.zeros(n_actions), sigma=0.5 * np.ones(n_actions), decay=0.998
+                mean=np.zeros(n_actions),
+                sigma=0.5 * np.ones(n_actions),
+                decay=0.998,
+                target_sigma=0.1 * np.ones(n_actions),
+                delay_decay_for=int(param_reader.read("learning_starts", "DDPG"))
+                - 200000,
             )
             # policy_kwargs = dict(
             #     net_arch=dict(pi=[400, 300], qf=[200, 150]),
@@ -129,9 +134,13 @@ def create_model(
         case "TD3":
             n_actions = env.action_space.shape[-1]
             action_noise = OrnsteinUhlenbeckActionNoiseWithDecay(
-                mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions)
+                mean=np.zeros(n_actions),
+                sigma=0.5 * np.ones(n_actions),
+                decay=0.998,
+                target_sigma=0.1 * np.ones(n_actions),
+                delay_decay_for=int(param_reader.read("learning_starts", "TD3"))
+                - 200000,
             )
-            policy_kwargs = dict(net_arch=dict(pi=[800, 600, 600], qf=[800, 600, 600]))
             model = TD3(
                 "MlpPolicy",
                 env,
@@ -140,24 +149,28 @@ def create_model(
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
                 buffer_size=int(param_reader.read("buffer_size", "TD3")),
-                learning_starts=100,
-                policy_kwargs=policy_kwargs,
-                train_freq=(1, "episode"),
                 batch_size=int(param_reader.read("batch_size", "TD3")),
+                learning_starts=int(param_reader.read("learning_starts", "TD3")),
                 gamma=float(param_reader.read("gamma", "TD3")),
-                learning_rate=linear_schedule(0.001),
-                seed=0,
                 optimize_memory_usage=True,
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
             )
 
+            model.actor.optimizer.weight_decay = 0.01
+            model.critic.optimizer.weight_decay = 0.01
+
+            model.actor.optimizer.lr = float(param_reader.read("actor_lr", "TD3"))
+            model.critic.optimizer.lr = float(param_reader.read("critic_lr", "TD3"))
+
+            model_config["learning_starts"] = int(
+                param_reader.read("learning_starts", "TD3")
+            )
             model_config["action_noise"] = repr(action_noise)
             model_config["learning_rate"] = repr(linear_schedule(0.001))
             model_config["gamma"] = float(param_reader.read("gamma", "TD3"))
             model_config["buffer_size"] = int(param_reader.read("buffer_size", "TD3"))
             model_config["batch_size"] = int(param_reader.read("batch_size", "TD3"))
-            model_config["policy_kwargs"] = repr(policy_kwargs)
-            model_config["train_freq"] = '(1, "episode")'
+            # model_config["policy_kwargs"] = repr(policy_kwargs)
             model_config["learning_starts"] = 100
         case "PPO":
             # policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))

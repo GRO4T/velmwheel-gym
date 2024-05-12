@@ -1,9 +1,9 @@
 import logging
-from stable_baselines3.common.noise import ActionNoise
-from numpy.typing import DTypeLike
 from typing import Optional
-import numpy as np
 
+import numpy as np
+from numpy.typing import DTypeLike
+from stable_baselines3.common.noise import ActionNoise
 
 logger = logging.getLogger(__name__)
 
@@ -22,24 +22,29 @@ class OrnsteinUhlenbeckActionNoiseWithDecay(ActionNoise):
     :param dtype: Type of the output noise
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         mean: np.ndarray,
         sigma: np.ndarray,
+        target_sigma: np.ndarray,
         theta: float = 0.15,
         dt: float = 1e-2,
         initial_noise: Optional[np.ndarray] = None,
         dtype: DTypeLike = np.float32,
         decay: float = 0.998,
         decay_rate: int = 500,
+        delay_decay_for: int = 0,
     ) -> None:
         self._theta = theta
         self._mu = mean
         self._sigma = sigma
+        self._target_sigma = target_sigma
         self._dt = dt
         self._dtype = dtype
         self._decay = decay
         self._decay_rate = decay_rate
+        self._delay_decay_for = delay_decay_for
         self._calls = 0
         self.initial_noise = initial_noise
         self.noise_prev = np.zeros_like(self._mu)
@@ -54,8 +59,10 @@ class OrnsteinUhlenbeckActionNoiseWithDecay(ActionNoise):
         )
 
         self._calls += 1
-        if self._calls % self._decay_rate == 0:
+        if self._calls > self._delay_decay_for and self._calls % self._decay_rate == 0:
             self._sigma *= self._decay
+            if (self._sigma * self._decay < self._target_sigma).any():
+                self._sigma = self._target_sigma
             logger.trace(f"{self._sigma=}")
 
         self.noise_prev = noise
