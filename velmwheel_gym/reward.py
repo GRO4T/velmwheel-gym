@@ -1,6 +1,5 @@
 import logging
 
-from velmwheel_gym.constants import POINT_REACHED_THRESHOLD
 from velmwheel_gym.global_guidance_path import GlobalGuidancePath
 from velmwheel_gym.types import Point
 
@@ -18,7 +17,7 @@ def calculate_reward(
     robot_position: Point,
     goal: Point,
     is_robot_collide: bool,
-    goal_reached_threshold: float,
+    point_reached_threshold: float,
     num_passed_points: int,
     global_guidance_path: GlobalGuidancePath,
     max_episode_steps: int,
@@ -32,8 +31,8 @@ def calculate_reward(
         The robot object.
     goal : Point
         The robot's goal.
-    goal_reached_threshold : float
-        The threshold for the robot to reach the goal.
+    point_reached_threshold : float
+        The threshold for the robot to reach the point.
     num_passed_points : int
         The number of global guidance points passed by the robot in current step.
     global_guidance_path : GlobalGuidancePath
@@ -54,7 +53,7 @@ def calculate_reward(
         )
         return COLLISION_PENALTY + remaining_detour_penalty, True
 
-    if robot_position.dist(goal) < goal_reached_threshold:
+    if robot_position.dist(goal) < point_reached_threshold:
         global_guidance_left_reward = (
             PATH_FOLLOWING_REWARD
             * len(global_guidance_path.points)
@@ -69,17 +68,21 @@ def calculate_reward(
             False,
         )
 
-    if _is_detoured_from_global_guidance_path(global_guidance_path, robot_position):
+    if _is_detoured_from_global_guidance_path(
+        global_guidance_path, robot_position, point_reached_threshold
+    ):
         return DETOUR_PENALTY / max_episode_steps, False
 
     return 0.0, False
 
 
 def _is_detoured_from_global_guidance_path(
-    global_guidance_path: GlobalGuidancePath, robot_position: Point
+    global_guidance_path: GlobalGuidancePath,
+    robot_position: Point,
+    point_reached_threshold: float,
 ) -> bool:
     if not global_guidance_path.points:
         return False
     return (
-        global_guidance_path.points[0].dist(robot_position) >= POINT_REACHED_THRESHOLD
+        global_guidance_path.points[0].dist(robot_position) >= point_reached_threshold
     )

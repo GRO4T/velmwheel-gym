@@ -28,7 +28,7 @@ gym_env = param_reader.read("gym_env")
 algorithm = param_reader.read("algorithm")
 model_path = param_reader.read("model")
 replay_buffer_path = param_reader.read("replay_buffer")
-goal_reached_threshold = float(param_reader.read("goal_reached_threshold"))
+point_reached_threshold = float(param_reader.read("point_reached_threshold"))
 real_time_factor = float(param_reader.read("real_time_factor"))
 goal_x = float(param_reader.read("goal_x"))
 goal_y = float(param_reader.read("goal_y"))
@@ -44,7 +44,9 @@ goal = [goal_x, goal_y]
 min_dist_to_goal = math.inf  # pylint: disable=invalid-name
 
 env = gym.make(
-    gym_env, min_goal_dist=goal_reached_threshold, real_time_factor=real_time_factor
+    gym_env,
+    point_reached_threshold=point_reached_threshold,
+    real_time_factor=real_time_factor,
 )
 
 model, _ = load_model(
@@ -81,14 +83,12 @@ while True:
 
     env.render()
 
-    if dist_to_goal < goal_reached_threshold:
+    if dist_to_goal < point_reached_threshold:
         env.reset()
         value = input("Next goal? (y/n): ")
         if value.lower() == "n":
             subprocess.run("./kill_sim.sh", shell=True, check=True)
             break
-        goal_x = float(input("Goal x: "))
-        goal_y = float(input("Goal y: "))
         obs, _ = env.reset(
             options={
                 "starting_position": starting_position,

@@ -1,8 +1,10 @@
+import copy
 import logging
 import math
 import time
 from typing import Optional
 
+import numpy as np
 import rclpy
 from gazebo_msgs.srv import SetEntityState
 from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped, Twist
@@ -39,7 +41,9 @@ class VelmwheelRobot:
         self._is_collide: bool = False
         self._position: Optional[Point] = None
         self._position_tstamp: float = 0.0
+        self._lidar_pointcloud_raw: Optional[np.array] = None
         self._lidar_data: Optional[list[float]] = None
+        self._prev_lidar_data: Optional[list[float]] = None
         self._lidar_tstamp: float = 0.0
         self._lidar_max_range: Optional[float] = None
         self._simulation_time: Optional[int] = None
@@ -114,6 +118,11 @@ class VelmwheelRobot:
     @position_tstamp.setter
     def position_tstamp(self, value: float):
         self._position_tstamp = value
+
+    @property
+    def lidar_pointcloud_raw(self) -> Optional[np.array]:
+        """Raw LIDAR pointcloud data."""
+        return self._lidar_pointcloud_raw
 
     @property
     def lidar_data(self) -> Optional[list[float]]:
@@ -242,10 +251,24 @@ class VelmwheelRobot:
             logger.warning("Position is not set yet")
             return
         self._lidar_data = []
+        self._lidar_pointcloud_raw = pointcloud2_to_array(message)
+
         for point in pointcloud2_to_array(message)[::12]:
             x, y, _, _ = point
-            r = math.dist(self.position, (x, y))
+            point_2d = np.array([x, y])
+            r = np.sqrt(point_2d.dot(point_2d))
             self._lidar_data.append(min(r, 20.0))
+
+        # remove NaNs
+        for i in range(0, len(self._lidar_data), 2):
+            if math.isnan(self._lidar_data[i]):
+                self._lidar_data[i] = self._prev_lidar_data[i]
+            if math.isnan(self._lidar_data[i + 1]):
+                self._lidar_data[i + 1] = self._prev_lidar_data[i + 1]
+
+        # remove Infs
+        self._lidar_data = [x if not math.isinf(x) else 20.0 for x in self._lidar_data]
+        self._prev_lidar_data = copy.deepcopy(self._lidar_data)
 
         self._lidar_tstamp = time.time()
 

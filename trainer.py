@@ -20,6 +20,8 @@ from velmwheel_rl.common import (
     load_model,
 )
 
+# from stable_baselines3.common.vec_env import VecCheckNan
+
 
 def monitor_network(algorithm: str, model: BaseAlgorithm):
     match algorithm:
@@ -65,6 +67,18 @@ parser.add_argument(
 parser.add_argument(
     "--save_freq", type=int, help="Frequency of saving the model", required=False
 )
+parser.add_argument(
+    "--batch_size", type=int, help="Batch size for training", required=False
+)
+parser.add_argument(
+    "--buffer_size", type=int, help="Size of the replay buffer", required=False
+)
+parser.add_argument(
+    "--actor_lr", type=float, help="Learning rate for the actor", required=False
+)
+parser.add_argument(
+    "--critic_lr", type=float, help="Learning rate for the critic", required=False
+)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -78,7 +92,7 @@ algorithm = param_reader.read("algorithm")
 model_path = param_reader.read("model")
 replay_buffer_path = param_reader.read("replay_buffer")
 timesteps = int(param_reader.read("timesteps"))
-goal_reached_threshold = float(param_reader.read("goal_reached_threshold"))
+point_reached_threshold = float(param_reader.read("point_reached_threshold"))
 real_time_factor = float(param_reader.read("real_time_factor"))
 envs = int(param_reader.read("envs"))
 
@@ -93,12 +107,16 @@ model_save_path, tb_log_name = get_model_save_path_and_tb_log_name(
 )
 
 extra_params = dict(
-    min_goal_dist=goal_reached_threshold, real_time_factor=real_time_factor
+    point_reached_threshold=point_reached_threshold,
+    real_time_factor=real_time_factor,
+    render_mode="human",
 )
 if envs > 1:
     env = make_vec_env(gym_env, n_envs=4, **extra_params)
 else:
-    env = gym.make(gym_env, **extra_params)
+    # env = gym.make(gym_env, **extra_params)
+    env = make_vec_env(gym_env, n_envs=1, env_kwargs=extra_params)
+    # env = VecCheckNan(env, raise_exception=True)
 
 if model_path:
     model, model_config = load_model(
@@ -124,7 +142,7 @@ if "2D" in gym_env:
     callbacks.append(
         EvalCallback(
             eval_env,
-            best_model_save_path=os.path.join(model_save_path, "best"),
+            best_model_save_path=model_save_path,
             eval_freq=10000,
             deterministic=True,
             render=False,

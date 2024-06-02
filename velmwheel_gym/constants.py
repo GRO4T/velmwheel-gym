@@ -9,6 +9,3 @@ GLOBAL_GUIDANCE_OBSERVATION_POINTS = 10
 
 # All coordinates are divided by this factor while being part of an observation
 COORDINATES_NORMALIZATION_FACTOR = 20.0
-
-# Threshold for any point to be considered reached
-POINT_REACHED_THRESHOLD = 0.5  # meters

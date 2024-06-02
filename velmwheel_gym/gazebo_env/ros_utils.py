@@ -1,5 +1,5 @@
 import logging
-from collections import namedtuple
+from dataclasses import dataclass
 from typing import Optional
 
 import rclpy
@@ -8,9 +8,16 @@ from rclpy.node import Client, Node
 
 logger = logging.getLogger(__name__)
 
-RosServiceClientWrapper = namedtuple(
-    "RosServiceClientWrapper", "node client request ros_topic"
-)
+
+@dataclass(frozen=False)
+class RosServiceClientWrapper:
+    node: Node
+    client: Client
+    request: object
+    ros_topic: str
+
+    def __iter__(self):
+        return iter((self.node, self.client, self.request, self.ros_topic))
 
 
 def wait_for_service(service_client: Client, ros_topic: str):
