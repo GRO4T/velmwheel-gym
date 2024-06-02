@@ -1,3 +1,4 @@
+import copy
 import logging
 from typing import Optional
 
@@ -60,9 +61,10 @@ class OrnsteinUhlenbeckActionNoiseWithDecay(ActionNoise):
 
         self._calls += 1
         if self._calls > self._delay_decay_for and self._calls % self._decay_rate == 0:
-            self._sigma *= self._decay
             if (self._sigma * self._decay < self._target_sigma).any():
-                self._sigma = self._target_sigma
+                self._sigma = copy.deepcopy(self._target_sigma)
+            else:
+                self._sigma *= self._decay
             logger.trace(f"{self._sigma=}")
 
         self.noise_prev = noise
