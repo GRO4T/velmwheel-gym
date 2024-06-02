@@ -28,23 +28,13 @@ class Robot2dEnv(gym.Env):
         self,
         dT=0.05,
         is_goal=True,
-        eps_err=0.4,
-        max_action_magnitude=5,
         **kwargs,
     ):
         super().__init__()
 
-        # Initialize variables
-        self.state = None
-        self.viewer = None
-        self.is_goal = is_goal
-        self.dT = dT
-
-        self.robot = Robot2D(dT=self.dT, is_render=True, is_goal=self.is_goal)
-        self.eps_err = eps_err
+        self._point_reached_threshold = kwargs["point_reached_threshold"]
+        self.robot = Robot2D(dT=dT, is_render=True, is_goal=is_goal)
         self.steps = 0
-
-        self.max_action_magnitude = max_action_magnitude
 
         self.robot_goal = np.array([0.0, 0.0])
 
@@ -128,14 +118,14 @@ class Robot2dEnv(gym.Env):
 
         self.robot.step(vx, vy, w)
         num_passed_points = self.robot._global_guidance_path.update(
-            Point(*self.robot_position)
+            Point(*self.robot_position), self._point_reached_threshold
         )
 
         reward, terminated = calculate_reward(
             Point(*self.robot_position),
             self.goal,
             self.robot.is_crashed(),
-            1.0,
+            self._point_reached_threshold,
             num_passed_points,
             self.robot._global_guidance_path,
             self.max_episode_steps,

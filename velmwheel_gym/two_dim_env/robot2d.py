@@ -313,7 +313,7 @@ class Environment:
         return px, py
 
     def get_random_obstacles(
-        self, xr, yr, rr, is_goal=False, xg=0, yg=0, rg=0, n=15, r=0.3
+        self, xr, yr, rr, is_goal=False, xg=0, yg=0, rg=0, n=5, r=0.3
     ):
         xcs = []
         ycs = []
