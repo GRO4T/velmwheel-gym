@@ -1,6 +1,5 @@
 # pylint: disable=redefined-outer-name, c-extension-no-member
 import configparser
-import os
 import signal
 import sys
 
@@ -11,6 +10,7 @@ from stable_baselines3.common.env_util import make_vec_env
 
 import wandb
 from velmwheel_gym import *  # pylint: disable=wildcard-import, unused-wildcard-import
+from velmwheel_gym.constants import NAVIGATION_DIFFICULTIES
 from velmwheel_gym.logger import init_logging
 from velmwheel_rl.common import (
     ParameterReader,
@@ -19,8 +19,6 @@ from velmwheel_rl.common import (
     get_model_save_path_and_tb_log_name,
     load_model,
 )
-
-# from stable_baselines3.common.vec_env import VecCheckNan
 
 
 def monitor_network(algorithm: str, model: BaseAlgorithm):
@@ -92,7 +90,7 @@ algorithm = param_reader.read("algorithm")
 model_path = param_reader.read("model")
 replay_buffer_path = param_reader.read("replay_buffer")
 timesteps = int(param_reader.read("timesteps"))
-point_reached_threshold = float(param_reader.read("point_reached_threshold"))
+navigation_difficulty_level = int(param_reader.read("navigation_difficulty_level"))
 real_time_factor = float(param_reader.read("real_time_factor"))
 envs = int(param_reader.read("envs"))
 
@@ -107,7 +105,7 @@ model_save_path, tb_log_name = get_model_save_path_and_tb_log_name(
 )
 
 extra_params = dict(
-    point_reached_threshold=point_reached_threshold,
+    difficulty=NAVIGATION_DIFFICULTIES[navigation_difficulty_level],
     real_time_factor=real_time_factor,
     render_mode="human",
 )

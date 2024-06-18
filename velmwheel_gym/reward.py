@@ -1,7 +1,7 @@
 import logging
 
 from velmwheel_gym.global_guidance_path import GlobalGuidancePath
-from velmwheel_gym.types import Point
+from velmwheel_gym.types import NavigationDifficulty, Point
 
 logger = logging.getLogger(__name__)
 
@@ -17,43 +17,19 @@ def calculate_reward(
     robot_position: Point,
     goal: Point,
     is_robot_collide: bool,
-    point_reached_threshold: float,
+    difficulty: NavigationDifficulty,
     num_passed_points: int,
     global_guidance_path: GlobalGuidancePath,
     max_episode_steps: int,
     steps: int,
 ) -> tuple[float, bool]:
-    """Calculates the reward.
-
-    Parameters
-    ----------
-    robot : VelmwheelRobot
-        The robot object.
-    goal : Point
-        The robot's goal.
-    point_reached_threshold : float
-        The threshold for the robot to reach the point.
-    num_passed_points : int
-        The number of global guidance points passed by the robot in current step.
-    global_guidance_path : GlobalGuidancePath
-        The global guidance path.
-    max_episode_steps : int
-        The maximum number of steps in an episode.
-    steps : int
-        The current step number.
-
-    Returns
-    -------
-    tuple[float, bool]
-        The reward and a boolean indicating if the episode is done.
-    """
     if is_robot_collide:
         remaining_detour_penalty = (
             (max_episode_steps - steps) * DETOUR_PENALTY / max_episode_steps
         )
         return COLLISION_PENALTY + remaining_detour_penalty, True
 
-    if robot_position.dist(goal) < point_reached_threshold:
+    if robot_position.dist(goal) < difficulty.goal_reached_threshold:
         global_guidance_left_reward = (
             PATH_FOLLOWING_REWARD
             * len(global_guidance_path.points)
@@ -69,7 +45,7 @@ def calculate_reward(
         )
 
     if _is_detoured_from_global_guidance_path(
-        global_guidance_path, robot_position, point_reached_threshold
+        global_guidance_path, robot_position, difficulty.driving_in_path_tolerance
     ):
         return DETOUR_PENALTY / max_episode_steps, False
 
@@ -79,10 +55,10 @@ def calculate_reward(
 def _is_detoured_from_global_guidance_path(
     global_guidance_path: GlobalGuidancePath,
     robot_position: Point,
-    point_reached_threshold: float,
+    driving_in_path_tolerance: float,
 ) -> bool:
     if not global_guidance_path.points:
         return False
     return (
-        global_guidance_path.points[0].dist(robot_position) >= point_reached_threshold
+        global_guidance_path.points[0].dist(robot_position) >= driving_in_path_tolerance
     )

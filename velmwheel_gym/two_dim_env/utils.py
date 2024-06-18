@@ -1,6 +1,6 @@
 """ Based on: https://github.com/EmanuelSamir/simple-2d-robot-lidar/blob/main/robot2d/utils.py"""
 
-import numpy as np
+from math import cos, pi, pow, sin, sqrt
 
 
 def sgn(x):
@@ -21,20 +21,23 @@ def obtain_intersection_points(x1, y1, x2, y2, xc, yc, rc):
     dx = x2n - x1n
     dy = y2n - y1n
 
-    dr = np.sqrt(dx**2 + dy**2)
+    dr = sqrt(dx * dx + dy * dy)
     D = x1n * y2n - x2n * y1n
 
-    delta = rc**2 * dr**2 - D**2
+    dr_pow = dr * dr
+
+    delta = rc * rc * dr_pow - D * D
 
     if delta >= 0:
-        xi1 = (D * dy + sgn(dy) * dx * np.sqrt(delta)) / (dr**2)
-        yi1 = -(D * dx - np.abs(dy) * np.sqrt(delta)) / (dr**2)
+        sqrt_delta = sqrt(delta)
+        xi1 = (D * dy + sgn(dy) * dx * sqrt_delta) / dr_pow
+        yi1 = -(D * dx - abs(dy) * sqrt_delta) / dr_pow
 
-        xi2 = (D * dy - sgn(dy) * dx * np.sqrt(delta)) / (dr**2)
-        yi2 = -(D * dx + np.abs(dy) * np.sqrt(delta)) / (dr**2)
+        xi2 = (D * dy - sgn(dy) * dx * sqrt_delta) / dr_pow
+        yi2 = -(D * dx + abs(dy) * sqrt_delta) / dr_pow
 
-        dis1 = np.sqrt(((xi1 + xc - x1) ** 2) + ((yi1 + yc - y1) ** 2))
-        dis2 = np.sqrt(((xi2 + xc - x1) ** 2) + ((yi2 + yc - y1) ** 2))
+        dis1 = sqrt(((xi1 + xc - x1) ** 2) + ((yi1 + yc - y1) ** 2))
+        dis2 = sqrt(((xi2 + xc - x1) ** 2) + ((yi2 + yc - y1) ** 2))
 
         if dis2 > dis1:
             return True, [xi1 + xc, yi1 + yc]
@@ -46,15 +49,15 @@ def obtain_intersection_points(x1, y1, x2, y2, xc, yc, rc):
 
 def validate_point(x, y, xo, yo, th, max_range):
     # Check if it is the same direction
-    if sgn(y) != sgn(np.sin(th)):
+    if sgn(y) != sgn(sin(th)):
         return False
-    elif sgn(x) != sgn(np.cos(th)):
+    elif sgn(x) != sgn(cos(th)):
         return False
     # Check it is within the range
-    elif np.sqrt(x**2 + y**2) > max_range:
+    elif sqrt(x**2 + y**2) > max_range:
         return False
 
-    elif np.sqrt(x**2 + y**2) > np.sqrt(xo**2 + yo**2):
+    elif sqrt(x**2 + y**2) > sqrt(xo**2 + yo**2):
         return False
     else:
         return True
@@ -62,10 +65,10 @@ def validate_point(x, y, xo, yo, th, max_range):
 
 def clip_angle(th):
     try:
-        while th <= -np.pi:
-            th = th + 2 * np.pi
-        while th > np.pi:
-            th = th - 2 * np.pi
+        while th <= -pi:
+            th = th + 2 * pi
+        while th > pi:
+            th = th - 2 * pi
         return th
     except:
         raise Exception("th angle was not a number")

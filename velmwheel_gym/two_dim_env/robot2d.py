@@ -6,8 +6,7 @@ from matplotlib import pyplot as plt
 from velmwheel_gym.constants import LIDAR_DATA_SIZE
 from velmwheel_gym.global_guidance_path import GlobalGuidancePath
 from velmwheel_gym.two_dim_env.lidar_2d import Lidar2D
-from velmwheel_gym.two_dim_env.planner import potential_field_planning
-from velmwheel_gym.types import Point
+from velmwheel_gym.types import NavigationDifficulty, Point
 
 from .utils import *
 
@@ -15,6 +14,7 @@ from .utils import *
 class Robot2D:
     def __init__(
         self,
+        difficulty: NavigationDifficulty,
         env_max_size=5,
         env_min_size=-5,
         robot_radius=0.4,
@@ -23,6 +23,7 @@ class Robot2D:
         is_render=True,
         is_goal=True,
     ):
+        self._difficulty = difficulty
         # Environment
         self.env = Environment(env_min_size, env_max_size)
         self.env_min_size = env_min_size
@@ -76,20 +77,20 @@ class Robot2D:
         self.xls = []
         self.yls = []
 
-        grid_size = 0.5  # potential grid size [m]
-        robot_radius = 1.0  # robot radius [m]
-        px, py = potential_field_planning(
-            self.xr,
-            self.yr,
-            self.xg,
-            self.yg,
-            self.env.xcs,
-            self.env.ycs,
-            grid_size,
-            robot_radius,
-        )
+        dx = self.xg - self.xr
+        dy = self.yg - self.yr
+        dx_step = dx / 160
+        dy_step = dy / 160
+        px = []
+        py = []
+        for i in range(160):
+            px.append(self.xr + i * dx_step)
+            py.append(self.yr + i * dy_step)
+
         points = [Point(x, y) for x, y in zip(px, py)]
-        self._global_guidance_path = GlobalGuidancePath(Point(self.xr, self.yr), points)
+        self._global_guidance_path = GlobalGuidancePath(
+            Point(self.xr, self.yr), points, self._difficulty
+        )
 
     def set_init_state(self, x0, y0, th0=0):
         self.xr = x0
@@ -313,7 +314,7 @@ class Environment:
         return px, py
 
     def get_random_obstacles(
-        self, xr, yr, rr, is_goal=False, xg=0, yg=0, rg=0, n=5, r=0.3
+        self, xr, yr, rr, is_goal=False, xg=0, yg=0, rg=0, n=0, r=0.3
     ):
         xcs = []
         ycs = []

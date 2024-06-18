@@ -183,15 +183,13 @@ class VelmwheelEnv(gym.Env):
 
         obs = self._observe()
 
-        num_passed_points = self._global_guidance_path.update(
-            self._robot.position, self._point_reached_threshold
-        )
+        num_passed_points = self._global_guidance_path.update(self._robot.position)
 
         reward, terminated = calculate_reward(
             self._robot.position,
             self.goal,
             self._robot.is_collide,
-            self._point_reached_threshold,
+            self._difficulty,
             num_passed_points,
             self._global_guidance_path,
             self.max_episode_steps,
@@ -363,7 +361,10 @@ class VelmwheelEnv(gym.Env):
 
         obs.extend(
             get_n_points_evenly_spaced_on_path(
-                self._global_guidance_path, 10, [self.goal.x, self.goal.y]
+                self._global_guidance_path,
+                10,
+                [self.goal.x, self.goal.y],
+                self.robot_position,
             )
         )
 

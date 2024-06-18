@@ -13,7 +13,7 @@ from velmwheel_gym.constants import (
 )
 from velmwheel_gym.global_guidance_path import get_n_points_evenly_spaced_on_path
 from velmwheel_gym.reward import calculate_reward
-from velmwheel_gym.types import Point
+from velmwheel_gym.types import NavigationDifficulty, Point
 
 from .robot2d import Robot2D
 
@@ -32,8 +32,10 @@ class Robot2dEnv(gym.Env):
     ):
         super().__init__()
 
-        self._point_reached_threshold = kwargs["point_reached_threshold"]
-        self.robot = Robot2D(dT=dT, is_render=True, is_goal=is_goal)
+        self._difficulty: NavigationDifficulty = kwargs["difficulty"]
+        self.robot = Robot2D(
+            dT=dT, is_render=True, is_goal=is_goal, difficulty=self._difficulty
+        )
         self.steps = 0
 
         self.robot_goal = np.array([0.0, 0.0])
@@ -89,16 +91,22 @@ class Robot2dEnv(gym.Env):
         # clamp and normalize LIDAR ranges
         ranges = [min(r, self.robot.max_range) / self.robot.max_range for r in ranges]
 
+        goal_x_relative = self.goal.x - self.robot_position[0]
+        goal_y_relative = self.goal.y - self.robot_position[1]
+
         obs = [
             self.robot_position[0],
             self.robot_position[1],
-            self.goal.x,
-            self.goal.y,
+            goal_x_relative,
+            goal_y_relative,
         ]
 
         obs.extend(
             get_n_points_evenly_spaced_on_path(
-                self.robot._global_guidance_path, 10, [self.goal.x, self.goal.y]
+                self.robot._global_guidance_path,
+                10,
+                [goal_x_relative, goal_y_relative],
+                Point(*self.robot_position),
             )
         )
 
@@ -118,14 +126,14 @@ class Robot2dEnv(gym.Env):
 
         self.robot.step(vx, vy, w)
         num_passed_points = self.robot._global_guidance_path.update(
-            Point(*self.robot_position), self._point_reached_threshold
+            Point(*self.robot_position)
         )
 
         reward, terminated = calculate_reward(
             Point(*self.robot_position),
             self.goal,
             self.robot.is_crashed(),
-            self._point_reached_threshold,
+            self._difficulty,
             num_passed_points,
             self.robot._global_guidance_path,
             self.max_episode_steps,

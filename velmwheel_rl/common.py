@@ -124,6 +124,9 @@ def create_model(
                 delay_decay_for=int(param_reader.read("learning_starts", "TD3"))
                 - 200000,
             )
+            # policy_kwargs = dict(
+            #     net_arch=dict(pi=[400, 300], qf=[200, 200]),
+            # )
             model = TD3(
                 "MlpPolicy",
                 env,
@@ -137,6 +140,7 @@ def create_model(
                 gamma=float(param_reader.read("gamma", "TD3")),
                 optimize_memory_usage=True,
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
+                # policy_kwargs=policy_kwargs,
             )
 
             model.actor.optimizer.weight_decay = 0.01
@@ -212,13 +216,32 @@ def load_model(
 ) -> tuple[BaseAlgorithm, dict]:
     match algorithm:
         case "DDPG":
-            model = DDPG.load(model_path, env=env)
+            model = DDPG.load(
+                model_path,
+                env=env,
+                learning_starts=int(param_reader.read("learning_starts", "DDPG")),
+            )
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
         case "TD3":
-            model = TD3.load(model_path, env=env)
+            model = DDPG.load(
+                model_path,
+                env=env,
+                learning_starts=int(param_reader.read("learning_starts", "TD3")),
+            )
+
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
+
+            # for param in model.actor.parameters():
+            #     param.requires_grad = False
+
+            # def weight_reset(m):
+            #     if isinstance(m, nn.Linear):
+            #         m.reset_parameters()
+
+            # model.critic.apply(weight_reset)
+            # model.critic_target.apply(weight_reset)
         case "PPO":
             model = PPO.load(model_path, env=env)
         case "SAC":
@@ -261,9 +284,9 @@ def bootstrap_argument_parser() -> argparse.ArgumentParser:
         "--replay_buffer", type=str, help="Replay buffer to load", required=False
     )
     parser.add_argument(
-        "--goal_reached_threshold",
-        type=float,
-        help="Minimum distance to goal to reach it",
+        "--navigation_difficulty_level",
+        type=int,
+        help="Navigation difficulty level",
         required=False,
     )
     parser.add_argument(
