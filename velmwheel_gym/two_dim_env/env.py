@@ -2,6 +2,7 @@
 
 import logging
 import math
+from collections import deque
 
 import gymnasium as gym
 import numpy as np
@@ -10,6 +11,8 @@ from velmwheel_gym.constants import (
     COORDINATES_NORMALIZATION_FACTOR,
     GLOBAL_GUIDANCE_OBSERVATION_POINTS,
     LIDAR_DATA_SIZE,
+    NAVIGATION_DIFFICULTIES,
+    STATS_BUFFER_SIZE,
 )
 from velmwheel_gym.global_guidance_path import get_n_points_evenly_spaced_on_path
 from velmwheel_gym.reward import calculate_reward
@@ -37,6 +40,10 @@ class Robot2dEnv(gym.Env):
             dT=dT, is_render=True, is_goal=is_goal, difficulty=self._difficulty
         )
         self.steps = 0
+        self._episode = 0
+        self._total_reward = 0.0
+        self._reward_buffer = deque(maxlen=STATS_BUFFER_SIZE)
+        self._success_buffer = deque(maxlen=STATS_BUFFER_SIZE)
 
         self.robot_goal = np.array([0.0, 0.0])
 
@@ -140,20 +147,49 @@ class Robot2dEnv(gym.Env):
             self.steps,
         )
 
-        goal_distance = math.dist(self.robot_position, self.robot_goal)
-
         obs = self._observe()
 
-        logger.debug(
-            f"{reward=} {self.robot_position=} {self.robot_goal=} {goal_distance=}"
-        )
+        self._total_reward += reward
+
+        if terminated:
+            self._reward_buffer.append(self._total_reward)
+            self._success_buffer.append(1 if reward > 0 else 0)
+            mean_reward = (
+                np.mean(self._reward_buffer)
+                if len(self._reward_buffer) == STATS_BUFFER_SIZE
+                else "N/A"
+            )
+            success_rate = (
+                np.mean(self._success_buffer)
+                if len(self._success_buffer) == STATS_BUFFER_SIZE
+                else "N/A"
+            )
+            idx = NAVIGATION_DIFFICULTIES.index(self._difficulty)
+            logger.debug(
+                f"episode={self._episode} level={idx} reward={self._total_reward} mean_reward={mean_reward} success_rate={success_rate}"
+            )
+            if (
+                idx < len(NAVIGATION_DIFFICULTIES) - 1
+                and len(self._reward_buffer) == STATS_BUFFER_SIZE
+                and mean_reward > 0.7
+            ):
+                logger.info(
+                    "Mean reward ({mean_reward}) > 0.7. Advancing to the next level."
+                )
+                self._reward_buffer.clear()
+                self._success_buffer.clear()
+                self._difficulty = NAVIGATION_DIFFICULTIES[idx + 1]
+                self.robot._difficulty = self._difficulty
+                self.robot._global_guidance_path._difficulty = self._difficulty
 
         return obs, reward, terminated, False, {}
 
     def reset(self, seed=None, options=None):  # Return to initial state
         self.robot.reset()
+        self._episode += 1
 
         self.steps = 0
+        self._total_reward = 0.0
 
         self.xr0 = self.robot.xr
         self.yr0 = self.robot.yr

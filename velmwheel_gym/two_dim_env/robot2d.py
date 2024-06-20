@@ -72,7 +72,14 @@ class Robot2D:
             self.thg = np.random.uniform(low=-np.pi, high=np.pi)
 
         self.env.get_random_obstacles(
-            self.xr, self.yr, self.rr, self.is_goal, self.xg, self.yg, self.rg
+            self.xr,
+            self.yr,
+            self.rr,
+            self.is_goal,
+            self.xg,
+            self.yg,
+            self.rg,
+            self._difficulty.dynamic_obstacle_count,
         )
         self.xls = []
         self.yls = []
@@ -122,7 +129,14 @@ class Robot2D:
             self.thg = np.random.uniform(low=-np.pi, high=np.pi)
 
         self.env.get_random_obstacles(
-            self.xr, self.yr, self.rr, self.is_goal, self.xg, self.yg, self.rg
+            self.xr,
+            self.yr,
+            self.rr,
+            self.is_goal,
+            self.xg,
+            self.yg,
+            self.rg,
+            self._difficulty.dynamic_obstacle_count,
         )
         self.xls = []
         self.yls = []

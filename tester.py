@@ -5,6 +5,7 @@ import subprocess
 import gymnasium as gym
 
 from velmwheel_gym import *  # pylint: disable=wildcard-import, unused-wildcard-import
+from velmwheel_gym.constants import NAVIGATION_DIFFICULTIES
 from velmwheel_gym.logger import init_logging
 from velmwheel_gym.types import Point
 from velmwheel_rl.common import ParameterReader, bootstrap_argument_parser, load_model
@@ -28,7 +29,7 @@ gym_env = param_reader.read("gym_env")
 algorithm = param_reader.read("algorithm")
 model_path = param_reader.read("model")
 replay_buffer_path = param_reader.read("replay_buffer")
-point_reached_threshold = float(param_reader.read("point_reached_threshold"))
+navigation_difficulty_level = int(param_reader.read("navigation_difficulty_level"))
 real_time_factor = float(param_reader.read("real_time_factor"))
 goal_x = float(param_reader.read("goal_x"))
 goal_y = float(param_reader.read("goal_y"))
@@ -42,10 +43,11 @@ init_logging(log_level)
 starting_position = Point(0.0, 0.0)
 goal = [goal_x, goal_y]
 min_dist_to_goal = math.inf  # pylint: disable=invalid-name
+difficulty = NAVIGATION_DIFFICULTIES[navigation_difficulty_level]
 
 env = gym.make(
     gym_env,
-    point_reached_threshold=point_reached_threshold,
+    difficulty=difficulty,
     real_time_factor=real_time_factor,
 )
 
@@ -83,7 +85,7 @@ while True:
 
     env.render()
 
-    if dist_to_goal < point_reached_threshold:
+    if dist_to_goal < difficulty.goal_reached_threshold:
         env.reset()
         value = input("Next goal? (y/n): ")
         if value.lower() == "n":
