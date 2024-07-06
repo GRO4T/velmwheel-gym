@@ -34,6 +34,11 @@ NAVIGATION_DIFFICULTIES = [
         driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=5,
     ),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacle_count=10,
+    ),
 ]
 
 STATS_BUFFER_SIZE = 10

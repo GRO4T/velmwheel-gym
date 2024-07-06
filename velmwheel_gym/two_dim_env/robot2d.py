@@ -1,13 +1,18 @@
 """ Based on: https://github.com/EmanuelSamir/simple-2d-robot-lidar/blob/main/robot2d/robot2d.py """
 
+import copy
 from typing import NamedTuple
 
 import numpy as np
 from matplotlib import pyplot as plt
 
 from velmwheel_gym.constants import LIDAR_DATA_SIZE
+from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
+    StartPositionAndGoalGenerator,
+)
 from velmwheel_gym.global_guidance_path import GlobalGuidancePath
 from velmwheel_gym.two_dim_env.lidar_2d import Lidar2D
+from velmwheel_gym.two_dim_env.planner import AStarPlanner
 from velmwheel_gym.types import NavigationDifficulty, Point
 
 from .utils import *
@@ -38,6 +43,7 @@ class Robot2D:
         self.rr = robot_radius
 
         # Goal parameters
+        self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
         self.is_goal = is_goal
         self.xg = 0
         self.yg = 0
@@ -60,88 +66,62 @@ class Robot2D:
         self._global_guidance_path: GlobalGuidancePath = None
 
     def reset(self):
-        self.xr = np.random.uniform(
-            low=self.env_min_size + self.rr, high=self.env_max_size - self.rr
-        )
-        self.yr = np.random.uniform(
-            low=self.env_min_size + self.rr, high=self.env_max_size - self.rr
-        )
+        self._start_position_and_goal_generator.generate_next()
+        self.xg = self._start_position_and_goal_generator.goal.x
+        self.yg = self._start_position_and_goal_generator.goal.y
+        self.xr = self._start_position_and_goal_generator.starting_position.x
+        self.yr = self._start_position_and_goal_generator.starting_position.y
+        self.thg = np.random.uniform(low=-np.pi, high=np.pi)
 
-        if self.is_goal:
-            self.xg, self.yg = self.env._random_point_without_robot(
-                self.xr, self.yr, self.rr, self.rg
-            )
-            self.thg = np.random.uniform(low=-np.pi, high=np.pi)
-
-        self.env.get_random_obstacles(
-            self.xr,
-            self.yr,
-            self.rr,
-            self.is_goal,
-            self.xg,
-            self.yg,
-            self.rg,
-            self._difficulty.dynamic_obstacle_count,
-        )
         self.xls = []
         self.yls = []
 
-        dx = self.xg - self.xr
-        dy = self.yg - self.yr
-        dx_step = dx / 160
-        dy_step = dy / 160
-        px = []
-        py = []
-        for i in range(160):
-            px.append(self.xr + i * dx_step)
-            py.append(self.yr + i * dy_step)
+        is_path_to_goal = False
+        while not is_path_to_goal:
+            self.env.get_random_obstacles(
+                self.xr,
+                self.yr,
+                self.rr,
+                self.is_goal,
+                self.xg,
+                self.yg,
+                self.rg,
+                self._difficulty.dynamic_obstacle_count,
+            )
+            o_dynamic_grid_x = copy.deepcopy(self.env.o_static_grid_x)
+            o_dynamic_grid_y = copy.deepcopy(self.env.o_static_grid_y)
+
+            for ox, oy in zip(
+                self.env.dynamic_obstacles_x, self.env.dynamic_obstacles_y
+            ):
+                o_dynamic_grid_x.append(ox)
+                o_dynamic_grid_y.append(oy)
+                o_dynamic_grid_x.append(ox + 0.2)
+                o_dynamic_grid_y.append(oy)
+                o_dynamic_grid_x.append(ox - 0.2)
+                o_dynamic_grid_y.append(oy)
+                o_dynamic_grid_x.append(ox)
+                o_dynamic_grid_y.append(oy + 0.2)
+                o_dynamic_grid_x.append(ox)
+                o_dynamic_grid_y.append(oy - 0.2)
+
+            a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.7)
+            px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
+            if len(px) > 0:
+                is_path_to_goal = True
+
+        a_star = AStarPlanner(
+            self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.7
+        )
+        px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
 
         points = [Point(x, y) for x, y in zip(px, py)]
+        points = points[
+            ::-1
+        ]  # This implementation of A* returns the path in reverse order
         self._global_guidance_path = GlobalGuidancePath(
             Point(self.xr, self.yr), points, self._difficulty
         )
-
-    def set_init_state(self, x0, y0, th0=0):
-        self.xr = x0
-        self.yr = y0
-        self.thr = clip_angle(th0)
-
-        if (self.xr > self.env_max_size - self.rr) or (
-            self.xr < self.env_min_size + self.rr
-        ):
-            raise ValueError(
-                "x value: {} is out of range {} and {}".format(
-                    self.xr, self.env_min_size, self.env_max_size
-                )
-            )
-
-        if (self.yr > self.env_max_size - self.rr) or (
-            self.yr < self.env_min_size + self.rr
-        ):
-            raise ValueError(
-                "y value: {} is out of range {} and {}".format(
-                    self.yr, self.env_min_size, self.env_max_size
-                )
-            )
-
-        if self.is_goal:
-            self.xg, self.yg = self.env._random_point_without_robot(
-                self.xr, self.yr, self.rr, self.rg
-            )
-            self.thg = np.random.uniform(low=-np.pi, high=np.pi)
-
-        self.env.get_random_obstacles(
-            self.xr,
-            self.yr,
-            self.rr,
-            self.is_goal,
-            self.xg,
-            self.yg,
-            self.rg,
-            self._difficulty.dynamic_obstacle_count,
-        )
-        self.xls = []
-        self.yls = []
 
     def set_random_goal(self):
         if self.is_goal:
@@ -287,6 +267,23 @@ class Environment:
             Environment.Wall(-9, 8.8, 18, 0.2),
             Environment.Wall(8.8, -9, 0.2, 18),
         ]
+
+        self.o_static_grid_x = []
+        self.o_static_grid_y = []
+
+        for wall in self.static_walls:
+            if wall.width > wall.height:
+                x = wall.x
+                while x < wall.x + wall.width:
+                    self.o_static_grid_x.append(x)
+                    self.o_static_grid_y.append(wall.y)
+                    x += 0.2
+            else:
+                y = wall.y
+                while y < wall.y + wall.height:
+                    self.o_static_grid_x.append(wall.x)
+                    self.o_static_grid_y.append(y)
+                    y += 0.2
 
         self.dynamic_obstacles_x = np.array([])
         self.dynamic_obstacles_y = np.array([])
