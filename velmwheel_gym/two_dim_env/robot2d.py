@@ -157,10 +157,6 @@ class Robot2D:
         self.thr = clip_angle(self.thr)
 
     def is_crashed(self):
-        xcs = self.env.dynamic_obstacles_x
-        ycs = self.env.dynamic_obstacles_y
-        rcs = self.env.dynamic_obstacles_radius
-
         if (self.xr > self.env_max_size - self.rr) or (
             self.xr < self.env_min_size + self.rr
         ):
@@ -171,9 +167,10 @@ class Robot2D:
         ):
             return True
 
-        for xc, yc, rc in zip(xcs, ycs, rcs):
-            if (np.sqrt((xc - self.xr) ** 2 + (yc - self.yr) ** 2)) < rc + self.rr:
+        for xl, yl in zip(self.xls, self.yls):
+            if np.linalg.norm([xl - self.xr, yl - self.yr]) < 0.5:
                 return True
+
         return False
 
     def scanning(self):
