@@ -39,6 +39,7 @@ class Robot2dEnv(gym.Env):
         self.robot = Robot2D(
             dT=dT, is_render=True, is_goal=is_goal, difficulty=self._difficulty
         )
+        self._render_mode = kwargs.get("render_mode", None)
         self.steps = 0
         self._episode = 0
         self._total_reward = 0.0
@@ -174,13 +175,16 @@ class Robot2dEnv(gym.Env):
                 and mean_reward > 0.7
             ):
                 logger.info(
-                    "Mean reward ({mean_reward}) > 0.7. Advancing to the next level."
+                    f"Mean reward ({mean_reward}) > 0.7. Advancing to the next level."
                 )
                 self._reward_buffer.clear()
                 self._success_buffer.clear()
                 self._difficulty = NAVIGATION_DIFFICULTIES[idx + 1]
                 self.robot._difficulty = self._difficulty
                 self.robot._global_guidance_path._difficulty = self._difficulty
+
+        if self._episode % 50 == 0 and self._render_mode == "human":
+            self.render()
 
         return obs, reward, terminated, False, {}
 

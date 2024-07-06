@@ -21,17 +21,17 @@ NAVIGATION_DIFFICULTIES = [
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.5,
-        driving_in_path_tolerance=0.5,
+        driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=0,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=0.5,
+        driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=0,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=0.5,
+        driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=5,
     ),
 ]

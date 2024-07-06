@@ -30,7 +30,7 @@ from velmwheel_gym.global_guidance_path import (
     get_n_points_evenly_spaced_on_path,
 )
 from velmwheel_gym.reward import calculate_reward
-from velmwheel_gym.types import Point
+from velmwheel_gym.types import NavigationDifficulty, Point
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ class VelmwheelEnv(gym.Env):
         super().__init__()
 
         self.render_mode = render_mode
+        self._training_mode = kwargs["training_mode"]
         self._fig = None
         self._ax = None
 
@@ -71,7 +72,7 @@ class VelmwheelEnv(gym.Env):
             dtype=np.float64,
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
-        self._point_reached_threshold: float = kwargs["point_reached_threshold"]
+        self._difficulty: NavigationDifficulty = kwargs["difficulty"]
         self._real_time_factor: float = kwargs["real_time_factor"]
         self._global_guidance_path: GlobalGuidancePath = None
         self._global_guidance_path_cache: dict[
@@ -230,9 +231,15 @@ class VelmwheelEnv(gym.Env):
         call_service(self._reset_world_srv)
 
         if options and "goal" in options and "starting_position" in options:
-            self._start_position_and_goal_generator.set(
-                options["starting_position"], options["goal"]
-            )
+            if self._training_mode:
+                self._start_position_and_goal_generator.set(
+                    options["starting_position"], options["goal"]
+                )
+            else:
+                self._start_position_and_goal_generator._starting_position = options[
+                    "starting_position"
+                ]
+                self._start_position_and_goal_generator._goal = options["goal"]
         else:
             self._start_position_and_goal_generator.generate_next()
         self._publish_goal()
@@ -307,7 +314,7 @@ class VelmwheelEnv(gym.Env):
         plt.pause(0.02)
         self._fig.canvas.draw()
 
-    def _spawn_random_obstacles(self, n: int = 10):
+    def _spawn_random_obstacles(self, n: int = 5):
         for i in range(n):
             self._delete_entity_srv.request = DeleteEntity.Request()
             self._delete_entity_srv.request.name = "box" + str(i)
@@ -421,7 +428,9 @@ class VelmwheelEnv(gym.Env):
             )
             return
 
-        self._global_guidance_path = GlobalGuidancePath(self._robot.position, points)
+        self._global_guidance_path = GlobalGuidancePath(
+            self._robot.position, points, self._difficulty
+        )
         if (self.starting_position, self.goal) not in self._global_guidance_path_cache:
             self._global_guidance_path_cache[
                 (self.starting_position, self.goal)

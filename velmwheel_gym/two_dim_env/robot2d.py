@@ -1,5 +1,7 @@
 """ Based on: https://github.com/EmanuelSamir/simple-2d-robot-lidar/blob/main/robot2d/robot2d.py """
 
+from typing import NamedTuple
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -15,9 +17,9 @@ class Robot2D:
     def __init__(
         self,
         difficulty: NavigationDifficulty,
-        env_max_size=5,
-        env_min_size=-5,
-        robot_radius=0.4,
+        env_max_size=9,
+        env_min_size=-9,
+        robot_radius=0.5,
         lidar_max_range=20.0,
         dT=0.01,
         is_render=True,
@@ -155,9 +157,9 @@ class Robot2D:
         self.thr = clip_angle(self.thr)
 
     def is_crashed(self):
-        xcs = self.env.xcs
-        ycs = self.env.ycs
-        rcs = self.env.rcs
+        xcs = self.env.dynamic_obstacles_x
+        ycs = self.env.dynamic_obstacles_y
+        rcs = self.env.dynamic_obstacles_radius
 
         if (self.xr > self.env_max_size - self.rr) or (
             self.xr < self.env_min_size + self.rr
@@ -182,26 +184,26 @@ class Robot2D:
         if self.is_render and self.first_render:
             plt.ion()
             self.fig, self.ax = plt.subplots(figsize=(10, 10))
-            self.ax.set_xlim((-5, 5))
-            self.ax.set_ylim((-5, 5))
+            self.ax.set_xlim((-9, 9))
+            self.ax.set_ylim((-9, 9))
             circle = plt.Circle((self.xr, self.yr), self.rr, color="r", fill=True)
             self.ax.add_patch(circle)
             plt.pause(0.5)
             self.first_render = False
 
         if self.is_render:
-            xcs = self.env.xcs
-            ycs = self.env.ycs
-            rcs = self.env.rcs
+            xcs = self.env.dynamic_obstacles_x
+            ycs = self.env.dynamic_obstacles_y
+            rcs = self.env.dynamic_obstacles_radius
             self.ax.clear()
-            self.ax.set_xlim((-5, 5))
-            self.ax.set_ylim((-5, 5))
+            self.ax.set_xlim((-9, 9))
+            self.ax.set_ylim((-9, 9))
 
+            # Draw robot
             circle = plt.Circle(
                 (self.xr, self.yr), self.rr, color="r", fill=True, zorder=10
             )
             self.ax.add_patch(circle)
-
             points = [
                 [
                     self.rr * np.cos(self.thr + np.deg2rad(140)) + self.xr,
@@ -219,22 +221,38 @@ class Robot2D:
             triag = plt.Polygon(points, zorder=20)
             self.ax.add_patch(triag)
 
+            # Draw static walls
+            for wall in self.env.static_walls:
+                wall = plt.Rectangle(
+                    (wall.x, wall.y),
+                    wall.width,
+                    wall.height,
+                    color="b",
+                    fill=True,
+                )
+                self.ax.add_patch(wall)
+
+            # Draw dynamic obstacles
+            for xc, yc, rc in zip(xcs, ycs, rcs):
+                circle = plt.Circle((xc, yc), rc, color="b", fill=True)
+                self.ax.add_patch(circle)
+
+            # Draw global guidance path
+            px = [p.x for p in self._global_guidance_path.points]
+            py = [p.y for p in self._global_guidance_path.points]
+            plt.plot(px, py, ".g")
+
+            # Draw goal
             if self.is_goal:
                 circle = plt.Circle(
                     (self.xg, self.yg), self.rg, color="g", fill=True, zorder=10
                 )
                 self.ax.add_patch(circle)
 
-            self.ax.scatter(self.xls, self.yls, color="r")
-            for xc, yc, rc in zip(xcs, ycs, rcs):
-                circle = plt.Circle((xc, yc), rc, color="b", fill=True)
-                self.ax.add_patch(circle)
+            # Draw lidar scans
             for xl, yl in zip(self.xls, self.yls):
                 self.ax.plot([self.xr, xl], [self.yr, yl], color="gray")
-
-            px = [p.x for p in self._global_guidance_path.points]
-            py = [p.y for p in self._global_guidance_path.points]
-            plt.plot(px, py, ".g")
+            self.ax.scatter(self.xls, self.yls, color="r")
 
             plt.pause(0.02)
             self.fig.canvas.draw()
@@ -246,22 +264,36 @@ class Robot2D:
 
 
 class Environment:
+    class Wall(NamedTuple):
+        x: float
+        y: float
+        width: float
+        height: float
+
     def __init__(
         self,
         env_min_size,
         env_max_size,
-        xcs=np.array([]),
-        ycs=np.array([]),
-        rcs=np.array([]),
     ):
-        # env param
         self.env_min_size = env_min_size
         self.env_max_size = env_max_size
 
-        # obstacles 3- x, y, radius
-        self.xcs = xcs
-        self.ycs = ycs
-        self.rcs = rcs
+        self.static_walls: list[Environment.Wall] = [
+            Environment.Wall(-6, -6, 8, 0.2),
+            Environment.Wall(4, -6, 5, 0.2),
+            Environment.Wall(-6, -6, 0.2, 4),
+            Environment.Wall(-6, 0, 0.2, 6),
+            Environment.Wall(-6, 6, 12, 0.2),
+            Environment.Wall(6, -6, 0.2, 12),
+            Environment.Wall(-9, -9, 18, 0.2),
+            Environment.Wall(-9, -9, 0.2, 18),
+            Environment.Wall(-9, 8.8, 18, 0.2),
+            Environment.Wall(8.8, -9, 0.2, 18),
+        ]
+
+        self.dynamic_obstacles_x = np.array([])
+        self.dynamic_obstacles_y = np.array([])
+        self.dynamic_obstacles_radius = np.array([])
 
     def _random_point_without_robot(self, pxr, pyr, rr, r):
         cond = False
@@ -302,7 +334,7 @@ class Environment:
         return px, py
 
     def _random_point_without_obstacles_and_robot(self, pxr, pyr, rr, r):
-        if self.xcs.size == 0:
+        if self.dynamic_obstacles_x.size == 0:
             print("No obstacles were found. Please load obstacles first.")
             return -1
 
@@ -320,7 +352,11 @@ class Environment:
                 cond = False
                 continue
 
-            for xc, yc, rc in zip(self.xcs, self.ycs, self.rcs):
+            for xc, yc, rc in zip(
+                self.dynamic_obstacles_x,
+                self.dynamic_obstacles_y,
+                self.dynamic_obstacles_radius,
+            ):
                 if (np.linalg.norm([px - xc, py - yc])) < rc + r:
                     cond = False
                     break
@@ -347,6 +383,6 @@ class Environment:
                 xcs.append(px)
                 ycs.append(py)
 
-        self.xcs = np.array(xcs)
-        self.ycs = np.array(ycs)
-        self.rcs = np.array(rcs)
+        self.dynamic_obstacles_x = np.array(xcs)
+        self.dynamic_obstacles_y = np.array(ycs)
+        self.dynamic_obstacles_radius = np.array(rcs)

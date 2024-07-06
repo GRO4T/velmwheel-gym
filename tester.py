@@ -15,7 +15,7 @@ from velmwheel_rl.common import ParameterReader, bootstrap_argument_parser, load
 # ---------------------------------------------------------------------------- #
 
 parser = bootstrap_argument_parser()
-parser.add_argument("--goal_x", type=float, help="Goal >x coordinate")
+parser.add_argument("--goal_x", type=float, help="Goal x coordinate")
 parser.add_argument("--goal_y", type=float, help="Goal y coordinate")
 
 args = parser.parse_args()
@@ -49,6 +49,8 @@ env = gym.make(
     gym_env,
     difficulty=difficulty,
     real_time_factor=real_time_factor,
+    render_mode="human",
+    training_mode=False,
 )
 
 model, _ = load_model(

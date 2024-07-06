@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 
 COLLISION_PENALTY = -0.9
 DETOUR_PENALTY = -0.1
-SUCCESS_REWARD = 0.5
-PATH_FOLLOWING_REWARD = 0.5
+SUCCESS_REWARD = 0.6
+PATH_FOLLOWING_REWARD = 0.4
 
 
 # pylint: disable=too-many-arguments

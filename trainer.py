@@ -5,7 +5,7 @@ import sys
 
 import gymnasium as gym
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
 
 import wandb
@@ -108,6 +108,7 @@ extra_params = dict(
     difficulty=NAVIGATION_DIFFICULTIES[navigation_difficulty_level],
     real_time_factor=real_time_factor,
     render_mode="human",
+    training_mode=True,
 )
 if envs > 1:
     env = make_vec_env(gym_env, n_envs=4, **extra_params)
@@ -135,17 +136,6 @@ callbacks.append(
     )
 )
 
-if "2D" in gym_env:
-    eval_env = gym.make(gym_env, **extra_params)
-    callbacks.append(
-        EvalCallback(
-            eval_env,
-            best_model_save_path=model_save_path,
-            eval_freq=10000,
-            deterministic=True,
-            render=False,
-        )
-    )
 
 run = wandb.init(
     project="velmwheel",

@@ -10,9 +10,9 @@ class Lidar2D:
         self._alphas = np.linspace(-np.deg2rad(fov) / 2, np.deg2rad(fov) / 2, rays)
 
     def scan(self) -> list:
-        xcs = self._robot.env.xcs
-        ycs = self._robot.env.ycs
-        rcs = self._robot.env.rcs
+        xcs = self._robot.env.dynamic_obstacles_x
+        ycs = self._robot.env.dynamic_obstacles_y
+        rcs = self._robot.env.dynamic_obstacles_radius
 
         r = self._max_range
         self._robot.xls = np.array([])
@@ -25,19 +25,41 @@ class Lidar2D:
                 self._robot.yls, self._robot.yr + r * np.sin(alpha + self._robot.thr)
             )
 
-        # Clamp the lidar readings to the environment boundaries
-        for i in range(len(self._robot.xls)):
-            self._robot.xls[i], self._robot.yls[i] = (
-                self._clamp_to_environment_boundaries(
-                    self._robot.xls[i], self._robot.yls[i]
-                )
-            )
-
         touches = []
         for i, (xl, yl, alpha) in enumerate(
             zip(self._robot.xls, self._robot.yls, self._alphas)
         ):
             touch = False
+
+            # Check if the lidar rays touch any static obstacle
+            for wall in self._robot.env.static_walls:
+                result = line_intersection(
+                    ((wall.x, wall.y), (wall.x + wall.width, wall.y + wall.height)),
+                    ((self._robot.xr, self._robot.yr), (xl, yl)),
+                )
+                if result:
+                    if (
+                        result[0] < wall.x
+                        or result[0] > wall.x + wall.width
+                        or result[1] < wall.y
+                        or result[1] > wall.y + wall.height
+                    ):
+                        continue
+                    touch = True
+                    cond = validate_point(
+                        result[0] - self._robot.xr,
+                        result[1] - self._robot.yr,
+                        self._robot.xls[i] - self._robot.xr,
+                        self._robot.yls[i] - self._robot.yr,
+                        self._robot.thr + alpha,
+                        self._max_range,
+                    )
+                    if cond:
+                        touch = True
+                        self._robot.xls[i] = result[0]
+                        self._robot.yls[i] = result[1]
+
+            # Check if the lidar rays touch any dynamic obstacle
             for xc, yc, rc in zip(xcs, ycs, rcs):
                 is_inter, result = obtain_intersection_points(
                     self._robot.xr, self._robot.yr, xl, yl, xc, yc, rc
@@ -58,46 +80,56 @@ class Lidar2D:
             touches.append(touch)
 
         for i, (x, y) in enumerate(zip(self._robot.xls, self._robot.yls)):
-            if x >= 5 or x <= -5 or y >= 5 or y <= -5:
+            if x >= 9 or x <= -9 or y >= 9 or y <= -9:
                 touches[i] = True
+
+        # Clamp the lidar readings to the environment boundaries
+        for i in range(len(self._robot.xls)):
+            (
+                self._robot.xls[i],
+                self._robot.yls[i],
+            ) = self._clamp_to_environment_boundaries(
+                self._robot.xls[i], self._robot.yls[i]
+            )
 
         return touches
 
     def _clamp_to_environment_boundaries(self, x, y):
-        top_bound = ((5, 5), (-5, 5))
-        bottom_bound = ((-5, -5), (5, -5))
-        left_bound = ((-5, 5), (-5, -5))
-        right_bound = ((5, -5), (5, 5))
+        top_bound = ((9, 9), (-9, 9))
+        bottom_bound = ((-9, -9), (9, -9))
+        left_bound = ((-9, 9), (-9, -9))
+        right_bound = ((9, -9), (9, 9))
 
-        if x > 5:
+        # TODO: take closer intersection point
+        if x > 9:
             if x > abs(y):
                 return line_intersection(
                     right_bound, ((self._robot.xr, self._robot.yr), (x, y))
                 )
-            if y > 5:
+            if y > 9:
                 return line_intersection(
                     top_bound, ((self._robot.xr, self._robot.yr), (x, y))
                 )
             return line_intersection(
                 bottom_bound, ((self._robot.xr, self._robot.yr), (x, y))
             )
-        if x < -5:
+        if x < -9:
             if abs(x) > abs(y):
                 return line_intersection(
                     left_bound, ((self._robot.xr, self._robot.yr), (x, y))
                 )
-            if y > 5:
+            if y > 9:
                 return line_intersection(
                     top_bound, ((self._robot.xr, self._robot.yr), (x, y))
                 )
             return line_intersection(
                 bottom_bound, ((self._robot.xr, self._robot.yr), (x, y))
             )
-        if y > 5:
+        if y > 9:
             return line_intersection(
                 top_bound, ((self._robot.xr, self._robot.yr), (x, y))
             )
-        if y < -5:
+        if y < -9:
             return line_intersection(
                 bottom_bound, ((self._robot.xr, self._robot.yr), (x, y))
             )
