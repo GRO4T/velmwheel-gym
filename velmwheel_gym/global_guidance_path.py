@@ -1,3 +1,4 @@
+import copy
 import logging
 
 from velmwheel_gym.types import NavigationDifficulty, Point
@@ -15,7 +16,6 @@ class GlobalGuidancePath:
         self._points = points
         self._difficulty = difficulty
         # NOTE: we want to trim initial points that are already passed, so we don't reward inaction
-        self.update(robot_position)
         self._original_num_points = len(points)
 
     @property
@@ -41,21 +41,42 @@ class GlobalGuidancePath:
 
 
 def get_n_points_evenly_spaced_on_path(
-    global_guidance_path: GlobalGuidancePath,
+    points: list[Point],
     n: int,
     default_point: list[float],
     origin: Point,
 ) -> list[float]:
-    if not global_guidance_path.points:
+    if not points:
         return n * default_point
 
     evenly_spaced_points = []
     for i in range(n):
-        idx = int((i / n) * len(global_guidance_path.points))
+        idx = int((i / n) * len(points))
         evenly_spaced_points.extend(
             [
-                global_guidance_path.points[idx].x - origin.x,
-                global_guidance_path.points[idx].y - origin.y,
+                points[idx].x - origin.x,
+                points[idx].y - origin.y,
             ]
         )
     return evenly_spaced_points
+
+
+def next_segment(
+    points: list[Point],
+    current_segment: list[Point],
+    robot_position: Point,
+    difficulty: NavigationDifficulty,
+) -> GlobalGuidancePath:
+    if current_segment is not None and len(current_segment) > 1:
+        min_idx = len(current_segment) - 1
+        anchor = current_segment[-1]
+    else:
+        min_idx = 0
+        anchor = robot_position
+
+    new_segment_points = copy.deepcopy(points)
+    for idx, point in enumerate(points):
+        if idx >= min_idx and point.dist(anchor) > 5.0:
+            new_segment_points = copy.deepcopy(points[: idx + 1])
+            break
+    return GlobalGuidancePath(robot_position, new_segment_points, difficulty)

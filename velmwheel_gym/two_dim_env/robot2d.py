@@ -10,7 +10,7 @@ from velmwheel_gym.constants import LIDAR_DATA_SIZE
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
 )
-from velmwheel_gym.global_guidance_path import GlobalGuidancePath
+from velmwheel_gym.global_guidance_path import GlobalGuidancePath, next_segment
 from velmwheel_gym.two_dim_env.lidar_2d import Lidar2D
 from velmwheel_gym.two_dim_env.planner import AStarPlanner
 from velmwheel_gym.types import NavigationDifficulty, Point
@@ -63,7 +63,8 @@ class Robot2D:
         self.ax = None
         self.first_render = True
 
-        self._global_guidance_path: GlobalGuidancePath = None
+        self.global_path: GlobalGuidancePath = None
+        self.global_path_segment: GlobalGuidancePath = None
 
     def reset(self):
         self._start_position_and_goal_generator.generate_next()
@@ -119,8 +120,11 @@ class Robot2D:
         points = points[
             ::-1
         ]  # This implementation of A* returns the path in reverse order
-        self._global_guidance_path = GlobalGuidancePath(
+        self.global_path = GlobalGuidancePath(
             Point(self.xr, self.yr), points, self._difficulty
+        )
+        self.global_path_segment = next_segment(
+            points, [], Point(self.xr, self.yr), self._difficulty
         )
 
     def set_random_goal(self):
@@ -215,9 +219,12 @@ class Robot2D:
                 self.ax.add_patch(circle)
 
             # Draw global guidance path
-            px = [p.x for p in self._global_guidance_path.points]
-            py = [p.y for p in self._global_guidance_path.points]
+            px = [p.x for p in self.global_path.points]
+            py = [p.y for p in self.global_path.points]
             plt.plot(px, py, ".g")
+            sx = [s.x for s in self.global_path_segment.points]
+            sy = [s.y for s in self.global_path_segment.points]
+            plt.plot(sx, sy, ".y")
 
             # Draw goal
             if self.is_goal:

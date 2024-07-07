@@ -14,7 +14,10 @@ from velmwheel_gym.constants import (
     NAVIGATION_DIFFICULTIES,
     STATS_BUFFER_SIZE,
 )
-from velmwheel_gym.global_guidance_path import get_n_points_evenly_spaced_on_path
+from velmwheel_gym.global_guidance_path import (
+    get_n_points_evenly_spaced_on_path,
+    next_segment,
+)
 from velmwheel_gym.reward import calculate_reward
 from velmwheel_gym.types import NavigationDifficulty, Point
 
@@ -45,8 +48,7 @@ class Robot2dEnv(gym.Env):
         self._total_reward = 0.0
         self._reward_buffer = deque(maxlen=STATS_BUFFER_SIZE)
         self._success_buffer = deque(maxlen=STATS_BUFFER_SIZE)
-
-        self.robot_goal = np.array([0.0, 0.0])
+        self._generate_next_goal = True
 
         self.xr0 = 0
         self.yr0 = 0
@@ -62,7 +64,7 @@ class Robot2dEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
+            shape=(2 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
             dtype=np.float64,
         )
 
@@ -72,7 +74,10 @@ class Robot2dEnv(gym.Env):
 
     @property
     def goal(self) -> Point:
-        return Point(*self.robot_goal)
+        return Point(
+            self.robot.global_path_segment.points[-1].x,
+            self.robot.global_path_segment.points[-1].y,
+        )
 
     @property
     def robot_position(self) -> np.array:
@@ -81,6 +86,12 @@ class Robot2dEnv(gym.Env):
     @property
     def starting_position(self) -> Point:
         return Point(self.xr0, self.yr0)
+
+    @property
+    def is_last_segment(self) -> bool:
+        return bool(
+            self.robot.global_path.points == self.robot.global_path_segment.points
+        )
 
     def _observe(self):
         self.robot.scanning()
@@ -103,15 +114,13 @@ class Robot2dEnv(gym.Env):
         goal_y_relative = self.goal.y - self.robot_position[1]
 
         obs = [
-            self.robot_position[0],
-            self.robot_position[1],
             goal_x_relative,
             goal_y_relative,
         ]
 
         obs.extend(
             get_n_points_evenly_spaced_on_path(
-                self.robot._global_guidance_path,
+                self.robot.global_path_segment.points,
                 10,
                 [goal_x_relative, goal_y_relative],
                 Point(*self.robot_position),
@@ -127,23 +136,24 @@ class Robot2dEnv(gym.Env):
 
     def step(self, action):
         self.steps += 1
-        # State Update
+
         vx = ACTION_NORMALIZATION_FACTOR * action[0]
         vy = ACTION_NORMALIZATION_FACTOR * action[1]
         w = 0.0
-
         self.robot.step(vx, vy, w)
-        num_passed_points = self.robot._global_guidance_path.update(
+
+        self.robot.global_path.update(Point(*self.robot_position))
+        num_passed_points = self.robot.global_path_segment.update(
             Point(*self.robot_position)
         )
 
-        reward, terminated = calculate_reward(
+        success, reward, terminated = calculate_reward(
             Point(*self.robot_position),
             self.goal,
             self.robot.is_crashed(),
             self._difficulty,
             num_passed_points,
-            self.robot._global_guidance_path,
+            self.robot.global_path_segment,
             self.max_episode_steps,
             self.steps,
         )
@@ -153,8 +163,22 @@ class Robot2dEnv(gym.Env):
         self._total_reward += reward
 
         if terminated:
+            self._generate_next_goal = True
+            if success:
+                if self.is_last_segment:
+                    logger.debug("Successfully reached the final goal")
+                    self.robot._start_position_and_goal_generator.register_goal_reached()
+                else:
+                    logger.debug("Successfully reached global path segment")
+                    self.robot.global_path_segment = next_segment(
+                        self.robot.global_path.points,
+                        self.robot.global_path_segment,
+                        Point(*self.robot_position),
+                        self._difficulty,
+                    )
+                    self._generate_next_goal = False
             self._reward_buffer.append(self._total_reward)
-            self._success_buffer.append(1 if reward > 0 else 0)
+            self._success_buffer.append(1 if success else 0)
             mean_reward = (
                 np.mean(self._reward_buffer)
                 if len(self._reward_buffer) == STATS_BUFFER_SIZE
@@ -181,25 +205,39 @@ class Robot2dEnv(gym.Env):
                 self._success_buffer.clear()
                 self._difficulty = NAVIGATION_DIFFICULTIES[idx + 1]
                 self.robot._difficulty = self._difficulty
-                self.robot._global_guidance_path._difficulty = self._difficulty
+                self.robot.global_path._difficulty = self._difficulty
+                self.robot.global_path_segment._difficulty = self._difficulty
 
-        if self._episode % 50 == 0 and self._render_mode == "human":
+        if self._episode % 1 == 0 and self._render_mode == "human":
             self.render()
 
         return obs, reward, terminated, False, {}
 
     def reset(self, seed=None, options=None):  # Return to initial state
-        self.robot.reset()
-        self._episode += 1
+        if self.steps >= self.max_episode_steps:
+            if self.is_last_segment:
+                logger.debug("Did not reach the final goal in time")
+                self._generate_next_goal = True
+            else:
+                logger.debug("Did not reach global path segment in time")
+                self.robot.global_path_segment = next_segment(
+                    self.robot.global_path.points,
+                    self.robot.global_path_segment.points,
+                    Point(*self.robot_position),
+                    self._difficulty,
+                )
 
         self.steps = 0
         self._total_reward = 0.0
 
-        self.xr0 = self.robot.xr
-        self.yr0 = self.robot.yr
-        self.thr0 = self.robot.thr
+        if self._generate_next_goal:
+            self._generate_next_goal = False
+            self.robot.reset()
+            self._episode += 1
 
-        self.robot_goal = np.array([self.robot.xg, self.robot.yg])
+            self.xr0 = self.robot.xr
+            self.yr0 = self.robot.yr
+            self.thr0 = self.robot.thr
 
         return self._observe(), {}
 
