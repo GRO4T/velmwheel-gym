@@ -172,7 +172,7 @@ class Robot2dEnv(gym.Env):
                     logger.debug("Successfully reached global path segment")
                     self.robot.global_path_segment = next_segment(
                         self.robot.global_path.points,
-                        self.robot.global_path_segment,
+                        self.robot.global_path_segment.points,
                         Point(*self.robot_position),
                         self._difficulty,
                     )
@@ -208,7 +208,7 @@ class Robot2dEnv(gym.Env):
                 self.robot.global_path._difficulty = self._difficulty
                 self.robot.global_path_segment._difficulty = self._difficulty
 
-        if self._episode % 1 == 0 and self._render_mode == "human":
+        if self._episode % 50 == 0 and self._render_mode == "human":
             self.render()
 
         return obs, reward, terminated, False, {}

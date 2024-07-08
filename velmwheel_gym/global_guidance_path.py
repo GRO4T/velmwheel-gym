@@ -16,6 +16,7 @@ class GlobalGuidancePath:
         self._points = points
         self._difficulty = difficulty
         # NOTE: we want to trim initial points that are already passed, so we don't reward inaction
+        self.update(robot_position)
         self._original_num_points = len(points)
 
     @property
@@ -31,7 +32,7 @@ class GlobalGuidancePath:
     def update(self, robot_position: Point) -> int:
         """Update path by removing passed points and return number of points removed."""
         last_passed_point = None
-        for i, point in enumerate(self._points):
+        for i, point in enumerate(self._points[:-1]):
             if robot_position.dist(point) < self._difficulty.driving_in_path_tolerance:
                 last_passed_point = i
         if last_passed_point is not None:
