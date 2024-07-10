@@ -64,6 +64,7 @@ obs, _ = env.reset(
     }
 )
 
+steps = 0
 while True:
     action, _ = model.predict(obs, deterministic=True)
 
@@ -99,3 +100,7 @@ while True:
                 "goal": Point(goal_x, goal_y),
             }
         )
+    steps += 1
+    if steps > 100:
+        steps = 0
+        env.reset()
