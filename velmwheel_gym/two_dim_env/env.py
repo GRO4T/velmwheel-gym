@@ -144,7 +144,6 @@ class Robot2dEnv(gym.Env):
         w = 0.0
         self.robot.step(vx, vy, w)
 
-        self.robot.global_path.update(Point(*self.robot_position))
         num_passed_points = self.robot.global_path_segment.update(
             Point(*self.robot_position)
         )
@@ -172,7 +171,10 @@ class Robot2dEnv(gym.Env):
                     self.robot._start_position_and_goal_generator.register_goal_reached()
                 else:
                     logger.debug("Successfully reached global path segment")
-                    self.robot.global_path_segment = next_segment(
+                    (
+                        self.robot.global_path.points,
+                        self.robot.global_path_segment,
+                    ) = next_segment(
                         self.robot.global_path.points,
                         self.robot.global_path_segment.points,
                         Point(*self.robot_position),
@@ -210,7 +212,7 @@ class Robot2dEnv(gym.Env):
                 self.robot.global_path._difficulty = self._difficulty
                 self.robot.global_path_segment._difficulty = self._difficulty
 
-        if self._episode % 50 == 0 and self._render_mode == "human":
+        if self._episode % 1 == 0 and self._render_mode == "human":
             self.render()
 
         return obs, reward, terminated, False, {}
@@ -222,7 +224,10 @@ class Robot2dEnv(gym.Env):
                 self._generate_next_goal = True
             else:
                 logger.debug("Did not reach global path segment in time")
-                self.robot.global_path_segment = next_segment(
+                (
+                    self.robot.global_path.points,
+                    self.robot.global_path_segment,
+                ) = next_segment(
                     self.robot.global_path.points,
                     self.robot.global_path_segment.points,
                     Point(*self.robot_position),

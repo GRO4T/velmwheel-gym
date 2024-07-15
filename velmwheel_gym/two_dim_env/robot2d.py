@@ -106,13 +106,13 @@ class Robot2D:
                 o_dynamic_grid_x.append(ox)
                 o_dynamic_grid_y.append(oy - 0.2)
 
-            a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.7)
+            a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.98)
             px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
             if len(px) > 0:
                 is_path_to_goal = True
 
         a_star = AStarPlanner(
-            self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.7
+            self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.98
         )
         px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
 
@@ -123,8 +123,8 @@ class Robot2D:
         self.global_path = GlobalGuidancePath(
             Point(self.xr, self.yr), points, self._difficulty
         )
-        self.global_path_segment = next_segment(
-            points, [], Point(self.xr, self.yr), self._difficulty
+        self.global_path.points, self.global_path_segment = next_segment(
+            self.global_path.points, [], Point(self.xr, self.yr), self._difficulty
         )
 
     def set_random_goal(self):

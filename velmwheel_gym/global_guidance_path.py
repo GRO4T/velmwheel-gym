@@ -17,12 +17,23 @@ class GlobalGuidancePath:
         self._difficulty = difficulty
         # NOTE: we want to trim initial points that are already passed, so we don't reward inaction
         self.update(robot_position)
+        prev = self._points[0]
+        new_points = [prev]
+        for p in self._points[1:]:
+            if p.dist(prev) >= 0.5:
+                new_points.append(p)
+                prev = p
+        self._points = new_points
         self._original_num_points = len(points)
 
     @property
     def points(self) -> list[Point]:
         """List of points in the path."""
-        return self._points
+        return [Point(p.x, p.y) for p in self._points]
+
+    @points.setter
+    def points(self, value: list[Point]):
+        self._points = value
 
     @property
     def original_num_points(self) -> int:
@@ -70,14 +81,20 @@ def next_segment(
 ) -> GlobalGuidancePath:
     if current_segment is not None and len(current_segment) > 1:
         min_idx = len(current_segment) - 1
-        anchor = current_segment[-1]
     else:
         min_idx = 0
-        anchor = robot_position
 
+    max_idx = len(points) - 1
+    delta = 0
+    prev = points[min_idx]
     new_segment_points = copy.deepcopy(points)
-    for idx, point in enumerate(points):
-        if idx >= min_idx and point.dist(anchor) > 5.0:
-            new_segment_points = copy.deepcopy(points[: idx + 1])
+    for idx, point in enumerate(points[min_idx + 1 :]):
+        delta += point.dist(prev)
+        prev = point
+        if delta > 5.0:
+            new_segment_points = copy.deepcopy(points[: min_idx + idx + 1])
+            max_idx = min_idx + idx + 1
             break
-    return GlobalGuidancePath(robot_position, new_segment_points, difficulty)
+    return points[max_idx:], GlobalGuidancePath(
+        robot_position, new_segment_points, difficulty
+    )
