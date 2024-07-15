@@ -5,6 +5,7 @@ from typing import Callable
 
 import gymnasium as gym
 import numpy as np
+import torch
 from stable_baselines3 import DDPG, PPO, SAC, TD3
 from stable_baselines3.common.base_class import BaseAlgorithm
 
@@ -118,7 +119,7 @@ def create_model(
             n_actions = env.action_space.shape[-1]
             action_noise = OrnsteinUhlenbeckActionNoiseWithDecay(
                 mean=np.zeros(n_actions),
-                sigma=0.5 * np.ones(n_actions),
+                sigma=1.0 * np.ones(n_actions),
                 decay=0.998,
                 target_sigma=0.1 * np.ones(n_actions),
                 delay_decay_for=int(param_reader.read("learning_starts", "TD3"))
@@ -127,6 +128,9 @@ def create_model(
             # policy_kwargs = dict(
             #     net_arch=dict(pi=[400, 300], qf=[200, 200]),
             # )
+            policy_kwargs = dict(
+                # optimizer_class=torch.optim.RMSprop,
+            )
             model = TD3(
                 "MlpPolicy",
                 env,
@@ -140,14 +144,18 @@ def create_model(
                 gamma=float(param_reader.read("gamma", "TD3")),
                 optimize_memory_usage=True,
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
-                # policy_kwargs=policy_kwargs,
+                policy_kwargs=policy_kwargs,
             )
 
-            model.actor.optimizer.weight_decay = 0.01
-            model.critic.optimizer.weight_decay = 0.01
+            model.actor.optimizer.param_groups[0]["weight_decay"] = 0.00001
+            model.critic.optimizer.param_groups[0]["weight_decay"] = 0.00001
 
-            model.actor.optimizer.lr = float(param_reader.read("actor_lr", "TD3"))
-            model.critic.optimizer.lr = float(param_reader.read("critic_lr", "TD3"))
+            model.actor.optimizer.param_groups[0]["lr"] = float(
+                param_reader.read("actor_lr", "TD3")
+            )
+            model.critic.optimizer.param_groups[0]["lr"] = float(
+                param_reader.read("critic_lr", "TD3")
+            )
         case "PPO":
             # policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))
             model = PPO(
