@@ -21,7 +21,7 @@ def init_logging(level: str = "debug", filename: str = "./logs/velmwheel/default
             raise ValueError(f"Unknown log level: {level}")
 
     # pylint: disable=redefined-builtin
-    format = "%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s"
+    format = "%(asctime)s %(filename)s:%(lineno)d %(levelname)s %(message)s"
 
     handler = RotatingFileHandler(filename, maxBytes=20 * 1024 * 1024, backupCount=5)
     handler.setLevel(level)

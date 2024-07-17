@@ -17,14 +17,9 @@ class GlobalGuidancePath:
         self._difficulty = difficulty
         # NOTE: we want to trim initial points that are already passed, so we don't reward inaction
         self.update(robot_position)
-        prev = self._points[0]
-        new_points = [prev]
-        for p in self._points[1:]:
-            if p.dist(prev) >= 0.5:
-                new_points.append(p)
-                prev = p
-        self._points = new_points
-        self._original_num_points = len(points)
+        if self._points:
+            self._points = _to_evenly_spaced(self._points, 0.5)
+        self._original_num_points = len(self._points)
 
     @property
     def points(self) -> list[Point]:
@@ -50,6 +45,16 @@ class GlobalGuidancePath:
             self._points = self._points[last_passed_point + 1 :]
             return last_passed_point + 1
         return 0
+
+
+def _to_evenly_spaced(points: list[Point], spacing: float) -> list[Point]:
+    prev = points[0]
+    new_points = [prev]
+    for p in points[1:]:
+        if p.dist(prev) >= spacing:
+            new_points.append(p)
+            prev = p
+    return new_points
 
 
 def get_n_points_evenly_spaced_on_path(
@@ -78,23 +83,21 @@ def next_segment(
     current_segment: list[Point],
     robot_position: Point,
     difficulty: NavigationDifficulty,
-) -> GlobalGuidancePath:
-    if current_segment is not None and len(current_segment) > 1:
-        min_idx = len(current_segment) - 1
-    else:
-        min_idx = 0
+) -> tuple[list[Point], GlobalGuidancePath]:
+    if not points:
+        return [], GlobalGuidancePath(robot_position, [], difficulty)
 
-    max_idx = len(points) - 1
+    split_idx = len(points)
     delta = 0
-    prev = points[min_idx]
+    prev = robot_position if not current_segment else current_segment[-1]
     new_segment_points = copy.deepcopy(points)
-    for idx, point in enumerate(points[min_idx + 1 :]):
+    for idx, point in enumerate(points):
         delta += point.dist(prev)
         prev = point
-        if delta > 5.0:
-            new_segment_points = copy.deepcopy(points[: min_idx + idx + 1])
-            max_idx = min_idx + idx + 1
+        if delta >= 5.0:
+            new_segment_points = copy.deepcopy(points[: idx + 1])
+            split_idx = idx + 1
             break
-    return points[max_idx:], GlobalGuidancePath(
-        robot_position, new_segment_points, difficulty
+    return points[split_idx:], GlobalGuidancePath(
+        robot_position, current_segment + new_segment_points, difficulty
     )

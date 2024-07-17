@@ -74,10 +74,17 @@ class Robot2dEnv(gym.Env):
 
     @property
     def goal(self) -> Point:
-        return Point(
-            self.robot.global_path_segment.points[-1].x,
-            self.robot.global_path_segment.points[-1].y,
+        goal_x = (
+            self.robot.global_path_segment.points[-1].x
+            if self.robot.global_path_segment.points
+            else self.robot.xg
         )
+        goal_y = (
+            self.robot.global_path_segment.points[-1].y
+            if self.robot.global_path_segment.points
+            else self.robot.yg
+        )
+        return Point(goal_x, goal_y)
 
     @property
     def robot_position(self) -> np.array:

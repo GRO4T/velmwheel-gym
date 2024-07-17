@@ -108,7 +108,7 @@ class Robot2D:
 
             a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.98)
             px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
-            if len(px) > 0:
+            if len(px) > 1:
                 is_path_to_goal = True
 
         a_star = AStarPlanner(

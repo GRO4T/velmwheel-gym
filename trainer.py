@@ -80,6 +80,7 @@ parser.add_argument(
 parser.add_argument(
     "--render", type=bool, help="Render the environment", required=False
 )
+parser.add_argument("--run_id", type=str, help="Run ID", required=False, default="")
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -97,8 +98,9 @@ navigation_difficulty_level = int(param_reader.read("navigation_difficulty_level
 real_time_factor = float(param_reader.read("real_time_factor"))
 envs = int(param_reader.read("envs"))
 render = param_reader.read("render")
+run_id = param_reader.read("run_id")
 
-init_logging(log_level)
+init_logging(log_level, f"./logs/velmwheel/default{run_id}.log")
 
 # ---------------------------------------------------------------------------- #
 #                              Training the model                              #
