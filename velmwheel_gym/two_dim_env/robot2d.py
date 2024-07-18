@@ -57,6 +57,8 @@ class Robot2D:
         self.yls = []
 
         # Parameters for simulation
+        self._time = 0.0
+        self._delta = 0.015
         self.dT = dT
         self.is_render = is_render
         self.fig = None
@@ -139,6 +141,20 @@ class Robot2D:
         self.yr = self.yr + self.dT * (np.sin(self.thr) * vx + np.cos(self.thr) * vy)
         self.thr = self.thr + self.dT * w
         self.thr = clip_angle(self.thr)
+
+        if self._time > 1.0 or self._time < 0.0:
+            self._delta = -self._delta
+        self._time += self._delta
+        if self._difficulty.dynamic_obstacle_motion:
+            for i in range(len(self.env.dynamic_obstacles_x)):
+                x, y = (
+                    self.env.dynamic_obstacles_orig_x[i],
+                    self.env.dynamic_obstacles_orig_y[i],
+                )
+                tx, ty = self.env.dynamic_obstacles_goals[i]
+                new_x, new_y = _interpolate_coordinates(x, y, tx, ty, self._time)
+                self.env.dynamic_obstacles_x[i] = new_x
+                self.env.dynamic_obstacles_y[i] = new_y
 
     def is_crashed(self):
         if (self.xr > self.env_max_size - self.rr) or (
@@ -292,8 +308,11 @@ class Environment:
                     self.o_static_grid_y.append(y)
                     y += 0.2
 
+        self.dynamic_obstacles_orig_x = np.array([])
+        self.dynamic_obstacles_orig_y = np.array([])
         self.dynamic_obstacles_x = np.array([])
         self.dynamic_obstacles_y = np.array([])
+        self.dynamic_obstacles_goals = np.array([])
         self.dynamic_obstacles_radius = np.array([])
 
     def _random_point_without_robot(self, pxr, pyr, rr, r):
@@ -369,6 +388,7 @@ class Environment:
     ):
         xcs = []
         ycs = []
+        gcs = []
         rcs = n * [r]
 
         if is_goal:
@@ -378,12 +398,25 @@ class Environment:
                 )
                 xcs.append(px)
                 ycs.append(py)
+                px, py = self._random_point_without_robot_and_goal(
+                    xr, yr, rr, xg, yg, rg, r
+                )
+                gcs.append((px, py))
         else:
             for _ in range(n):
                 px, py = self._random_point_without_robot(xr, yr, rr, r)
                 xcs.append(px)
                 ycs.append(py)
 
+        self.dynamic_obstacles_orig_x = np.array(xcs)
+        self.dynamic_obstacles_orig_y = np.array(ycs)
         self.dynamic_obstacles_x = np.array(xcs)
         self.dynamic_obstacles_y = np.array(ycs)
         self.dynamic_obstacles_radius = np.array(rcs)
+        self.dynamic_obstacles_goals = np.array(gcs)
+
+
+def _interpolate_coordinates(x1, y1, x2, y2, t):
+    x = x1 + t * (x2 - x1)
+    y = y1 + t * (y2 - y1)
+    return x, y

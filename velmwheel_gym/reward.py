@@ -14,6 +14,7 @@ PATH_FOLLOWING_REWARD = 0.5
 
 # pylint: disable=too-many-arguments
 def calculate_reward(
+    is_final_goal: bool,
     robot_position: Point,
     goal: Point,
     is_robot_collide: bool,
@@ -29,7 +30,12 @@ def calculate_reward(
         )
         return False, COLLISION_PENALTY + remaining_detour_penalty, True
 
-    if robot_position.dist(goal) < difficulty.goal_reached_threshold:
+    threshold = (
+        difficulty.goal_reached_threshold
+        if is_final_goal
+        else difficulty.driving_in_path_tolerance
+    )
+    if robot_position.dist(goal) < threshold:
         if global_guidance_path.original_num_points > 0:
             global_guidance_left_reward = (
                 PATH_FOLLOWING_REWARD

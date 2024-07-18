@@ -162,6 +162,12 @@ run = wandb.init(
     sync_tensorboard=True,
 )
 
+wandb.define_metric("level")
+wandb.define_metric("episode_reward")
+wandb.define_metric("mean_reward")
+wandb.define_metric("local_success_rate")
+wandb.define_metric("global_success_rate")
+
 
 # pylint: disable=unused-argument, global-statement
 def sigint_handler(sig, frame):

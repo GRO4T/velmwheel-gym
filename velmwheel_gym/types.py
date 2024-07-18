@@ -14,3 +14,4 @@ class NavigationDifficulty(NamedTuple):
     goal_reached_threshold: float
     driving_in_path_tolerance: float
     dynamic_obstacle_count: int
+    dynamic_obstacle_motion: bool

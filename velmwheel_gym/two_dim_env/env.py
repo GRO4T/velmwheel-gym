@@ -7,6 +7,7 @@ from collections import deque
 import gymnasium as gym
 import numpy as np
 
+import wandb
 from velmwheel_gym.constants import (
     COORDINATES_NORMALIZATION_FACTOR,
     GLOBAL_GUIDANCE_OBSERVATION_POINTS,
@@ -38,6 +39,7 @@ class Robot2dEnv(gym.Env):
     ):
         super().__init__()
 
+        self._training_mode = kwargs["training_mode"]
         self._difficulty: NavigationDifficulty = kwargs["difficulty"]
         self.robot = Robot2D(
             dT=dT, is_render=True, is_goal=is_goal, difficulty=self._difficulty
@@ -47,7 +49,11 @@ class Robot2dEnv(gym.Env):
         self._episode = 0
         self._total_reward = 0.0
         self._reward_buffer = deque(maxlen=STATS_BUFFER_SIZE)
-        self._success_buffer = deque(maxlen=STATS_BUFFER_SIZE)
+        self._mean_reward = -2.0
+        self._local_success_buffer = deque(maxlen=STATS_BUFFER_SIZE)
+        self._local_success_rate = -2.0
+        self._global_success_buffer = deque(maxlen=STATS_BUFFER_SIZE)
+        self._global_success_rate = -2.0
         self._generate_next_goal = True
 
         self.xr0 = 0
@@ -64,7 +70,7 @@ class Robot2dEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(2 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE // 9,),
+            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE // 9,),
             dtype=np.float64,
         )
 
@@ -96,9 +102,7 @@ class Robot2dEnv(gym.Env):
 
     @property
     def is_last_segment(self) -> bool:
-        return bool(
-            self.robot.global_path.points == self.robot.global_path_segment.points
-        )
+        return not self.robot.global_path.points
 
     def _observe(self):
         self.robot.scanning()
@@ -141,7 +145,7 @@ class Robot2dEnv(gym.Env):
 
         obs.extend(ranges)
 
-        return np.array(obs)
+        return np.array([1.0 if self.is_last_segment else 0.0] + obs)
 
     def step(self, action):
         self.steps += 1
@@ -156,6 +160,7 @@ class Robot2dEnv(gym.Env):
         )
 
         success, reward, terminated = calculate_reward(
+            self.is_last_segment,
             Point(*self.robot_position),
             self.goal,
             self.robot.is_crashed(),
@@ -174,6 +179,7 @@ class Robot2dEnv(gym.Env):
             self._generate_next_goal = True
             if success:
                 if self.is_last_segment:
+                    self._global_success_buffer.append(1)
                     logger.debug("Successfully reached the final goal")
                     self.robot._start_position_and_goal_generator.register_goal_reached()
                 else:
@@ -188,32 +194,43 @@ class Robot2dEnv(gym.Env):
                         self._difficulty,
                     )
                     self._generate_next_goal = False
+            else:
+                self._global_success_buffer.append(0)
             self._reward_buffer.append(self._total_reward)
-            self._success_buffer.append(1 if success else 0)
-            mean_reward = (
+            self._local_success_buffer.append(1 if success else 0)
+            self._mean_reward = (
                 np.mean(self._reward_buffer)
                 if len(self._reward_buffer) == STATS_BUFFER_SIZE
-                else "N/A"
+                else -2.0
             )
-            success_rate = (
-                np.mean(self._success_buffer)
-                if len(self._success_buffer) == STATS_BUFFER_SIZE
-                else "N/A"
+            self._local_success_rate = (
+                np.mean(self._local_success_buffer)
+                if len(self._local_success_buffer) == STATS_BUFFER_SIZE
+                else -2.0
+            )
+            self._global_success_rate = (
+                np.mean(self._global_success_buffer)
+                if len(self._global_success_buffer) == STATS_BUFFER_SIZE
+                else -2.0
             )
             idx = NAVIGATION_DIFFICULTIES.index(self._difficulty)
             logger.debug(
-                f"episode={self._episode} level={idx} reward={self._total_reward} mean_reward={mean_reward} success_rate={success_rate}"
+                f"episode={self._episode} level={idx} reward={self._total_reward} mean_reward={self._mean_reward} success_rate={self._local_success_rate}"
             )
             if (
                 idx < len(NAVIGATION_DIFFICULTIES) - 1
                 and len(self._reward_buffer) == STATS_BUFFER_SIZE
-                and mean_reward > 0.7
+                and self._global_success_rate > 0.7
             ):
                 logger.info(
-                    f"Mean reward ({mean_reward}) > 0.7. Advancing to the next level."
+                    f"Mean reward ({self._mean_reward}) > 0.7. Advancing to the next level."
                 )
                 self._reward_buffer.clear()
-                self._success_buffer.clear()
+                self._local_success_buffer.clear()
+                self._global_success_buffer.clear()
+                self._mean_reward = -2.0
+                self._local_success_rate = -2.0
+                self._global_success_rate = -2.0
                 self._difficulty = NAVIGATION_DIFFICULTIES[idx + 1]
                 self.robot._difficulty = self._difficulty
                 self.robot.global_path._difficulty = self._difficulty
@@ -221,6 +238,17 @@ class Robot2dEnv(gym.Env):
 
         if self._episode % 1 == 0 and self._render_mode == "human":
             self.render()
+
+        if self._training_mode:
+            metrics = {
+                "level": NAVIGATION_DIFFICULTIES.index(self._difficulty),
+                "mean_reward": self._mean_reward,
+                "local_success_rate": self._local_success_rate,
+                "global_success_rate": self._global_success_rate,
+            }
+            if terminated:
+                metrics["episode_reward"] = self._total_reward
+            wandb.log(metrics)
 
         return obs, reward, terminated, False, {}
 
