@@ -101,7 +101,7 @@ class Robot2dEnv(gym.Env):
         return Point(self.xr0, self.yr0)
 
     @property
-    def is_last_segment(self) -> bool:
+    def is_final_goal(self) -> bool:
         return not self.robot.global_path.points
 
     def _observe(self):
@@ -145,7 +145,7 @@ class Robot2dEnv(gym.Env):
 
         obs.extend(ranges)
 
-        return np.array([1.0 if self.is_last_segment else 0.0] + obs)
+        return np.array([1.0 if self.is_final_goal else 0.0] + obs)
 
     def step(self, action):
         self.steps += 1
@@ -160,7 +160,7 @@ class Robot2dEnv(gym.Env):
         )
 
         success, reward, terminated = calculate_reward(
-            self.is_last_segment,
+            self.is_final_goal,
             Point(*self.robot_position),
             self.goal,
             self.robot.is_crashed(),
@@ -178,7 +178,7 @@ class Robot2dEnv(gym.Env):
         if terminated:
             self._generate_next_goal = True
             if success:
-                if self.is_last_segment:
+                if self.is_final_goal:
                     self._global_success_buffer.append(1)
                     logger.debug("Successfully reached the final goal")
                     self.robot._start_position_and_goal_generator.register_goal_reached()
@@ -254,7 +254,7 @@ class Robot2dEnv(gym.Env):
 
     def reset(self, seed=None, options=None):  # Return to initial state
         if self.steps >= self.max_episode_steps:
-            if self.is_last_segment:
+            if self.is_final_goal:
                 logger.debug("Did not reach the final goal in time")
                 self._generate_next_goal = True
             else:

@@ -1,7 +1,7 @@
 from velmwheel_gym.types import NavigationDifficulty
 
 # Step time in seconds at real time factor 1.0
-BASE_STEP_TIME = 0.16
+BASE_STEP_TIME = 0.016
 
 # Number of lidar rays
 LIDAR_DATA_SIZE = 90

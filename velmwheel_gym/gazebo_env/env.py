@@ -1,5 +1,8 @@
+import copy
 import logging
 import math
+import os
+import pickle
 import time
 from copy import deepcopy
 from typing import Optional
@@ -8,7 +11,7 @@ import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 import rclpy
-from gazebo_msgs.srv import DeleteEntity, SpawnEntity
+from gazebo_msgs.srv import SetEntityState, SpawnEntity
 from geometry_msgs.msg import Pose, PoseStamped
 from nav_msgs.msg import Path
 from rclpy.qos import qos_profile_system_default
@@ -28,6 +31,7 @@ from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
 from velmwheel_gym.global_guidance_path import (
     GlobalGuidancePath,
     get_n_points_evenly_spaced_on_path,
+    next_segment,
 )
 from velmwheel_gym.reward import calculate_reward
 from velmwheel_gym.types import NavigationDifficulty, Point
@@ -39,7 +43,7 @@ STOP_SIM_TOPIC = "/stop_sim"
 RESTART_SIM_TOPIC = "/restart_sim"
 RESET_WORLD_TOPIC = "/reset_world"
 SPAWN_ENTITY_TOPIC = "/spawn_entity"
-DELETE_ENTITY_TOPIC = "/delete_entity"
+SET_ENTITY_STATE_TOPIC = "/set_entity_state"
 NAVIGATION_GOAL_TOPIC = "/goal_pose"
 GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 
@@ -68,19 +72,25 @@ class VelmwheelEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
+            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE // 9,),
             dtype=np.float64,
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
         self._difficulty: NavigationDifficulty = kwargs["difficulty"]
         self._real_time_factor: float = kwargs["real_time_factor"]
-        self._global_guidance_path: GlobalGuidancePath = None
-        self._global_guidance_path_cache: dict[
-            tuple[Point, Point], GlobalGuidancePath
-        ] = {}
-        self._use_cache: bool = False
+        self._global_path: GlobalGuidancePath = None
+        self._global_path_segment: GlobalGuidancePath = None
+        if os.path.exists("state/nav2_cache.pkl"):
+            with open("state/nav2_cache.pkl", "rb") as f:
+                self._global_path_cache = pickle.load(f)
+            logger.debug("Loaded global path cache")
+        else:
+            self._global_path_cache: dict[tuple[Point, Point], GlobalGuidancePath] = {}
         self._steps: int = 0
         self._episode_reward: float = 0.0
+        self._generate_next_goal = True
+        self._is_obstacles_spawned = False
+        self._last_step_time = time.time()
 
         self._simulation_init()
         self._robot = VelmwheelRobot()
@@ -111,8 +121,8 @@ class VelmwheelEnv(gym.Env):
             self._node, SpawnEntity, SPAWN_ENTITY_TOPIC
         )
 
-        self._delete_entity_srv = create_ros_service_client(
-            self._node, DeleteEntity, DELETE_ENTITY_TOPIC
+        self._set_entity_state_srv = create_ros_service_client(
+            self._node, SetEntityState, SET_ENTITY_STATE_TOPIC
         )
 
         self._navigation_goal_pub = self._node.create_publisher(
@@ -129,6 +139,7 @@ class VelmwheelEnv(gym.Env):
         )
 
     def _simulation_reinit(self):
+        self._is_obstacles_spawned = False
         self._node.destroy_node()
         rclpy.shutdown()
         self._simulation_init()
@@ -142,6 +153,20 @@ class VelmwheelEnv(gym.Env):
     def goal(self) -> Point:
         """Robot's navigation goal."""
         return self._start_position_and_goal_generator.goal
+
+    @property
+    def sub_goal(self) -> Point:
+        goal_x = (
+            self._global_path_segment.points[-1].x
+            if self._global_path_segment.points
+            else self.goal.x
+        )
+        goal_y = (
+            self._global_path_segment.points[-1].y
+            if self._global_path_segment.points
+            else self.goal.y
+        )
+        return Point(goal_x, goal_y)
 
     @goal.setter
     def goal(self, point: Point):
@@ -170,10 +195,13 @@ class VelmwheelEnv(gym.Env):
     def max_episode_steps(self) -> int:
         return self._time_limit_max_episode_steps
 
+    @property
+    def is_final_goal(self) -> bool:
+        return not self._global_path.points
+
     def step(self, action):
         self._steps += 1
         step_time = BASE_STEP_TIME / self.real_time_factor
-        start = time.time()
 
         self._robot.move(action)
         if not self._robot.update():
@@ -184,36 +212,44 @@ class VelmwheelEnv(gym.Env):
 
         obs = self._observe()
 
-        num_passed_points = self._global_guidance_path.update(self._robot.position)
+        num_passed_points = self._global_path_segment.update(self._robot.position)
 
-        reward, terminated = calculate_reward(
+        success, reward, terminated = calculate_reward(
+            self.is_final_goal,
             self._robot.position,
-            self.goal,
+            self.sub_goal,
             self._robot.is_collide,
             self._difficulty,
             num_passed_points,
-            self._global_guidance_path,
+            self._global_path_segment,
             self.max_episode_steps,
             self._steps,
         )
         self._episode_reward += reward
 
         if terminated:
-            if self._robot.is_collide:
-                logger.debug("FAILURE: Robot collided with an obstacle")
-                # After collision, we should use the navigation stack to get a new path,
-                # so we will be able to detect if collision has broken odom -> map frame transformation.
-                self._use_cache = False
-            else:
-                logger.debug(f"SUCCESS: Robot reached goal at {self.goal=}")
-                self._start_position_and_goal_generator.register_goal_reached()
+            self._generate_next_goal = True
+            if success:
+                if self.is_final_goal:
+                    logger.debug(f"SUCCESS: Robot reached goal at {self.goal=}")
+                    self._start_position_and_goal_generator.register_goal_reached()
+                else:
+                    logger.debug("SUCCESS: Robot reached global path segment")
+                    self._global_path.points, self._global_path_segment = next_segment(
+                        self._global_path.points,
+                        self._global_path_segment.points,
+                        self._robot.position,
+                        self._difficulty,
+                    )
+                    self._generate_next_goal = False
 
         logger.trace(
             f"episode_reward={self._episode_reward} {reward=} dist_to_goal={self.goal.dist(self._robot.position)} goal={self.goal} position={self._robot.position} current_time={time.time()} position_tstamp={self._robot.position_tstamp} lidar_tstamp={self._robot.lidar_tstamp}"
         )
 
         end = time.time()
-        elapsed = end - start
+        elapsed = end - self._last_step_time
+        self._last_step_time = end
         if elapsed < step_time:
             time.sleep(step_time - elapsed)
         else:
@@ -226,42 +262,52 @@ class VelmwheelEnv(gym.Env):
 
     # pylint: disable=unused-argument
     def reset(self, seed=None, options=None):
+        if self._steps >= self.max_episode_steps:
+            if self.is_final_goal:
+                logger.debug("Did not reach the final goal in time")
+                self._generate_next_goal = True
+            else:
+                logger.debug("Did not reach global path segment in time")
+                (
+                    self._global_path.points,
+                    self._global_path_segment,
+                ) = next_segment(
+                    self._global_path.points,
+                    self._global_path_segment.points,
+                    self.robot_position,
+                    self._difficulty,
+                )
+
         self._steps = 0
         self._episode_reward = 0.0
-        call_service(self._reset_world_srv)
 
-        if options and "goal" in options and "starting_position" in options:
-            if self._training_mode:
-                self._start_position_and_goal_generator.set(
-                    options["starting_position"], options["goal"]
-                )
+        if self._generate_next_goal:
+            call_service(self._reset_world_srv)
+
+            if options and "goal" in options and "starting_position" in options:
+                if self._training_mode:
+                    self._start_position_and_goal_generator.set(
+                        options["starting_position"], options["goal"]
+                    )
+                else:
+                    self._start_position_and_goal_generator._starting_position = (
+                        options["starting_position"]
+                    )
+                    self._start_position_and_goal_generator._goal = options["goal"]
             else:
-                self._start_position_and_goal_generator._starting_position = options[
-                    "starting_position"
-                ]
-                self._start_position_and_goal_generator._goal = options["goal"]
-        else:
-            self._start_position_and_goal_generator.generate_next()
-        self._publish_goal()
+                self._start_position_and_goal_generator.generate_next()
+            self._publish_goal()
 
-        self._robot.reset(self.starting_position)
+            self._robot.reset(self.starting_position)
 
-        if (
-            self._use_cache
-            and (self.starting_position, self.goal) in self._global_guidance_path_cache
-        ):
-            self._get_global_guidance_path_from_cache()
-        else:
-            self._get_global_guidance_path_from_ros_navigation_stack()
-            self._use_cache = True
+            self._get_global_path()
+            self._spawn_random_obstacles(self._difficulty.dynamic_obstacle_count)
 
-        self._spawn_random_obstacles()
+            self._robot.position_tstamp = time.time()
+            self._robot.lidar_tstamp = time.time()
 
-        self._robot.position_tstamp = time.time()
-        self._robot.lidar_tstamp = time.time()
-
-        if self.render_mode == "human":
-            self.render()
+            if self.render_mode == "human":
+                self.render()
 
         return self._observe(), {}
 
@@ -308,53 +354,74 @@ class VelmwheelEnv(gym.Env):
         # Plot lidar points
         self._ax.plot(X, Y, "o", markersize=1, color="r")
         # Plot global guidance path
-        px = [p.x for p in self._global_guidance_path.points]
-        py = [p.y for p in self._global_guidance_path.points]
+        px = [p.x for p in self._global_path.points]
+        py = [p.y for p in self._global_path.points]
         self._ax.plot(px, py, ".g")
+        sx = [s.x for s in self._global_path_segment.points]
+        sy = [s.y for s in self._global_path_segment.points]
+        self._ax.plot(sx, sy, ".y")
         plt.pause(0.02)
         self._fig.canvas.draw()
 
     def _spawn_random_obstacles(self, n: int = 5):
-        for i in range(n):
-            self._delete_entity_srv.request = DeleteEntity.Request()
-            self._delete_entity_srv.request.name = "box" + str(i)
-            call_service(self._delete_entity_srv)
-
         logger.debug(f"Spawning {n} random obstacles")
         for i in range(n):
             while True:
-                x = np.random.uniform(-5, 5)
-                y = np.random.uniform(-5, 5)
+                x = np.random.uniform(-9, 9)
+                y = np.random.uniform(-9, 9)
                 if (
-                    Point(x, y).dist(self.goal) > 1.0
-                    and Point(x, y).dist(self.starting_position) > 1.0
+                    Point(x, y).dist(self.goal) > 2.0
+                    and Point(x, y).dist(self.starting_position) > 2.0
                 ):
                     break
 
-            self._spawn_entity_srv.request = SpawnEntity.Request()
-            self._spawn_entity_srv.request.name = "box" + str(i)
-            self._spawn_entity_srv.request.xml = open("./box.sdf", "r").read()
-            self._spawn_entity_srv.request.robot_namespace = "/"
-            self._spawn_entity_srv.request.initial_pose = Pose()
-            self._spawn_entity_srv.request.initial_pose.position.x = x
-            self._spawn_entity_srv.request.initial_pose.position.y = y
-            self._spawn_entity_srv.request.initial_pose.position.z = 0.0
-            self._spawn_entity_srv.request.reference_frame = "world"
-            call_service(self._spawn_entity_srv)
+            if not self._is_obstacles_spawned:
+                self._spawn_entity_srv.request = SpawnEntity.Request()
+                self._spawn_entity_srv.request.name = "box" + str(i)
+                self._spawn_entity_srv.request.xml = open("./box.sdf", "r").read()
+                self._spawn_entity_srv.request.robot_namespace = "/"
+                self._spawn_entity_srv.request.initial_pose = Pose()
+                self._spawn_entity_srv.request.initial_pose.position.x = x
+                self._spawn_entity_srv.request.initial_pose.position.y = y
+                self._spawn_entity_srv.request.initial_pose.position.z = 0.0
+                self._spawn_entity_srv.request.reference_frame = "world"
+                call_service(self._spawn_entity_srv)
+            else:
+                req = self._set_entity_state_srv.request
+                req.state.name = "box" + str(i)
+                req.state.pose.position.x = x
+                req.state.pose.position.y = y
+                req.state.pose.position.z = 0.0
+                req.state.pose.orientation.x = 0.0
+                req.state.pose.orientation.y = 0.0
+                req.state.pose.orientation.z = 0.0
+                req.state.pose.orientation.w = 1.0
+                call_service(self._set_entity_state_srv)
+
+        self._is_obstacles_spawned = True
+
+    def _get_global_path(self):
+        if (self.starting_position, self.goal) in self._global_path_cache:
+            self._get_global_guidance_path_from_cache()
+        else:
+            self._get_global_guidance_path_from_ros_navigation_stack()
+        self._global_path.points, self._global_path_segment = next_segment(
+            self._global_path.points, [], self.robot_position, self._difficulty
+        )
 
     def _get_global_guidance_path_from_cache(self):
         logger.debug(
             f"Using cached global guidance path from {self.starting_position} to {self.goal}"
         )
-        self._global_guidance_path = self._global_guidance_path_cache[
-            (self.starting_position, self.goal)
-        ]
+        self._global_path = copy.deepcopy(
+            self._global_path_cache[(self.starting_position, self.goal)]
+        )
 
     def _get_global_guidance_path_from_ros_navigation_stack(self):
         logger.debug(
             f"Waiting for the global guidance path from {self.starting_position} to {self.goal} from the ROS navigation stack"
         )
-        self._global_guidance_path = None
+        self._global_path = None
         while not self._wait_for_new_path(WAIT_FOR_NEW_PATH_TIMEOUT_SEC):
             logger.warning("Simulation in a bad state. Restarting the simulation.")
             call_service(self._stop_sim_srv)
@@ -362,25 +429,32 @@ class VelmwheelEnv(gym.Env):
             self._robot.reset(self.starting_position)
 
     def _observe(self) -> np.array:
-        position = self._robot.position
-
-        obs = [position.x, position.y, self.goal.x, self.goal.y]
+        goal_x_relative = self.sub_goal.x - self.robot_position[0]
+        goal_y_relative = self.sub_goal.y - self.robot_position[1]
+        obs = [
+            goal_x_relative,
+            goal_y_relative,
+        ]
 
         obs.extend(
             get_n_points_evenly_spaced_on_path(
-                self._global_guidance_path,
+                self._global_path_segment.points,
                 10,
-                [self.goal.x, self.goal.y],
+                [goal_x_relative, goal_y_relative],
                 self.robot_position,
             )
         )
 
         # normalize position and goal coordinates
         obs = [o / COORDINATES_NORMALIZATION_FACTOR for o in obs]
+        # min pooling from 90 to 10 ranges
+        ranges = [
+            min(self._robot.normalized_lidar_data[i : i + 9])
+            for i in range(0, len(self._robot.normalized_lidar_data), 9)
+        ]
+        obs.extend(ranges)
 
-        obs.extend(self._robot.normalized_lidar_data)
-
-        return np.clip(np.array(obs), -1.0, 1.0)
+        return np.array([1.0 if self.is_final_goal else 0.0] + obs)
 
     def _publish_goal(self):
         goal = PoseStamped()
@@ -391,7 +465,7 @@ class VelmwheelEnv(gym.Env):
 
     def _wait_for_new_path(self, timeout_sec: int) -> bool:
         total = 0.0
-        while not self._global_guidance_path:
+        while not self._global_path:
             start = time.time()
             self._publish_goal()
             rclpy.spin_once(self._node, timeout_sec=1.0)
@@ -403,7 +477,7 @@ class VelmwheelEnv(gym.Env):
         return True
 
     def _global_planner_callback(self, message: Path):
-        if self._global_guidance_path:  # update path only at the start of the episode
+        if self._global_path:  # update path only at the start of the episode
             return
 
         points = [
@@ -428,13 +502,15 @@ class VelmwheelEnv(gym.Env):
             )
             return
 
-        self._global_guidance_path = GlobalGuidancePath(
+        self._global_path = GlobalGuidancePath(
             self._robot.position, points, self._difficulty
         )
-        if (self.starting_position, self.goal) not in self._global_guidance_path_cache:
-            self._global_guidance_path_cache[
-                (self.starting_position, self.goal)
-            ] = deepcopy(self._global_guidance_path)
+        if (self.starting_position, self.goal) not in self._global_path_cache:
+            self._global_path_cache[(self.starting_position, self.goal)] = deepcopy(
+                self._global_path
+            )
+            with open("state/nav2_cache.pkl", "wb") as f:
+                pickle.dump(self._global_path_cache, f)
 
     def _analyze_path(self, points: list[Point]):
         logger.debug(f"New path has {len(points)} points")

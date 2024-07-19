@@ -5,6 +5,13 @@ from velmwheel_gym.max_episode_steps_injection_wrapper import (
 )
 
 register(
+    id="Velmwheel50-v0",
+    entry_point="velmwheel_gym.gazebo_env.env:VelmwheelEnv",
+    max_episode_steps=50,
+    additional_wrappers=(MaxEpisodeStepsInjectionWrapper.wrapper_spec(),),
+)
+
+register(
     id="Velmwheel100-v0",
     entry_point="velmwheel_gym.gazebo_env.env:VelmwheelEnv",
     max_episode_steps=100,

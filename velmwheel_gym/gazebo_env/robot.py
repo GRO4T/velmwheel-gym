@@ -202,6 +202,7 @@ class VelmwheelRobot:
 
     def move(self, action):
         """Sends movement controls to the robot."""
+        self._is_collide = False
         motion_cmd = Twist()
 
         motion_cmd.linear.x = action[0]
