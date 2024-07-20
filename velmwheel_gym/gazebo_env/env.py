@@ -11,7 +11,7 @@ import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 import rclpy
-from gazebo_msgs.srv import SetEntityState, SpawnEntity
+from gazebo_msgs.srv import DeleteEntity, SetEntityState, SpawnEntity
 from geometry_msgs.msg import Pose, PoseStamped
 from nav_msgs.msg import Path
 from rclpy.qos import qos_profile_system_default
@@ -44,6 +44,7 @@ RESTART_SIM_TOPIC = "/restart_sim"
 RESET_WORLD_TOPIC = "/reset_world"
 SPAWN_ENTITY_TOPIC = "/spawn_entity"
 SET_ENTITY_STATE_TOPIC = "/set_entity_state"
+DELETE_ENTITY_TOPIC = "/delete_entity"
 NAVIGATION_GOAL_TOPIC = "/goal_pose"
 GLOBAL_PLANNER_PATH_TOPIC = "/plan"
 
@@ -72,7 +73,7 @@ class VelmwheelEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE // 9,),
+            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
             dtype=np.float64,
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
@@ -119,6 +120,10 @@ class VelmwheelEnv(gym.Env):
 
         self._spawn_entity_srv = create_ros_service_client(
             self._node, SpawnEntity, SPAWN_ENTITY_TOPIC
+        )
+
+        self._delete_entity_srv = create_ros_service_client(
+            self._node, DeleteEntity, DELETE_ENTITY_TOPIC
         )
 
         self._set_entity_state_srv = create_ros_service_client(
@@ -408,6 +413,7 @@ class VelmwheelEnv(gym.Env):
         self._global_path.points, self._global_path_segment = next_segment(
             self._global_path.points, [], self.robot_position, self._difficulty
         )
+        self._publish_goal_marker()
 
     def _get_global_guidance_path_from_cache(self):
         logger.debug(
@@ -447,12 +453,7 @@ class VelmwheelEnv(gym.Env):
 
         # normalize position and goal coordinates
         obs = [o / COORDINATES_NORMALIZATION_FACTOR for o in obs]
-        # min pooling from 90 to 10 ranges
-        ranges = [
-            min(self._robot.normalized_lidar_data[i : i + 9])
-            for i in range(0, len(self._robot.normalized_lidar_data), 9)
-        ]
-        obs.extend(ranges)
+        obs.extend(self._robot.normalized_lidar_data)
 
         return np.array([1.0 if self.is_final_goal else 0.0] + obs)
 
@@ -462,6 +463,24 @@ class VelmwheelEnv(gym.Env):
         goal.pose.position.x = self.goal.x
         goal.pose.position.y = self.goal.y
         self._navigation_goal_pub.publish(goal)
+
+    def _publish_goal_marker(self):
+        self._delete_entity_srv.request = DeleteEntity.Request()
+        self._delete_entity_srv.request.name = "goal"
+        call_service(self._delete_entity_srv)
+        time.sleep(0.001)
+
+        self._spawn_entity_srv.request = SpawnEntity.Request()
+        self._spawn_entity_srv.request.name = "goal"
+        self._spawn_entity_srv.request.xml = open("./goal_marker.sdf", "r").read()
+        self._spawn_entity_srv.request.robot_namespace = "/"
+        self._spawn_entity_srv.request.initial_pose = Pose()
+        self._spawn_entity_srv.request.initial_pose.position.x = self.goal.x
+        self._spawn_entity_srv.request.initial_pose.position.y = self.goal.y
+        self._spawn_entity_srv.request.initial_pose.position.z = 0.0
+        self._spawn_entity_srv.request.reference_frame = "world"
+        call_service(self._spawn_entity_srv)
+        self._is_goal_spawned = True
 
     def _wait_for_new_path(self, timeout_sec: int) -> bool:
         total = 0.0

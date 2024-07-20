@@ -70,7 +70,7 @@ class Robot2dEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE // 9,),
+            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
             dtype=np.float64,
         )
 
@@ -120,8 +120,6 @@ class Robot2dEnv(gym.Env):
             ranges.append(math.dist(self.robot_position, (xl, yl)))
         # clamp and normalize LIDAR ranges
         ranges = [min(r, self.robot.max_range) / self.robot.max_range for r in ranges]
-        # min pooling from 90 to 10 ranges
-        ranges = [min(ranges[i : i + 9]) for i in range(0, len(ranges), 9)]
 
         goal_x_relative = self.goal.x - self.robot_position[0]
         goal_y_relative = self.goal.y - self.robot_position[1]
