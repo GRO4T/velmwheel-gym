@@ -28,7 +28,6 @@ class Robot2D:
         lidar_max_range=20.0,
         dT=0.01,
         is_render=True,
-        is_goal=True,
     ):
         self._difficulty = difficulty
         # Environment
@@ -44,7 +43,6 @@ class Robot2D:
 
         # Goal parameters
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
-        self.is_goal = is_goal
         self.xg = 0
         self.yg = 0
         self.thg = 0
@@ -74,6 +72,7 @@ class Robot2D:
         self.yg = self._start_position_and_goal_generator.goal.y
         self.xr = self._start_position_and_goal_generator.starting_position.x
         self.yr = self._start_position_and_goal_generator.starting_position.y
+        self.thr = 0.0
         self.thg = np.random.uniform(low=-np.pi, high=np.pi)
 
         self.xls = []
@@ -85,7 +84,6 @@ class Robot2D:
                 self.xr,
                 self.yr,
                 self.rr,
-                self.is_goal,
                 self.xg,
                 self.yg,
                 self.rg,
@@ -128,13 +126,6 @@ class Robot2D:
         self.global_path.points, self.global_path_segment = next_segment(
             self.global_path.points, [], Point(self.xr, self.yr), self._difficulty
         )
-
-    def set_random_goal(self):
-        if self.is_goal:
-            self.xg, self.yg = self.env._random_point_without_obstacles_and_robot(
-                self.xr, self.yr, self.rr, self.rg
-            )
-            self.thg = np.random.uniform(low=-np.pi, high=np.pi)
 
     def step(self, vx, vy, w=0):
         self.xr = self.xr + self.dT * (np.cos(self.thr) * vx - np.sin(self.thr) * vy)
@@ -243,11 +234,10 @@ class Robot2D:
             plt.plot(sx, sy, ".y")
 
             # Draw goal
-            if self.is_goal:
-                circle = plt.Circle(
-                    (self.xg, self.yg), self.rg, color="g", fill=True, zorder=10
-                )
-                self.ax.add_patch(circle)
+            circle = plt.Circle(
+                (self.xg, self.yg), self.rg, color="g", fill=True, zorder=10
+            )
+            self.ax.add_patch(circle)
 
             # Draw lidar scans
             for xl, yl in zip(self.xls, self.yls):
@@ -315,23 +305,6 @@ class Environment:
         self.dynamic_obstacles_goals = np.array([])
         self.dynamic_obstacles_radius = np.array([])
 
-    def _random_point_without_robot(self, pxr, pyr, rr, r):
-        cond = False
-        while not cond:
-            px = np.random.uniform(
-                low=self.env_min_size + rr, high=self.env_max_size - rr
-            )
-            py = np.random.uniform(
-                low=self.env_min_size + rr, high=self.env_max_size - rr
-            )
-            if ((px < pxr + r + rr) and (px > pxr - r - rr)) and (
-                (py < pyr + r + rr) and (py > pyr - r - rr)
-            ):
-                pass
-            else:
-                cond = True
-        return px, py
-
     def _random_point_without_robot_and_goal(self, pxr, pyr, rr, pxg, pyg, rg, r):
         cond = False
         while not cond:
@@ -353,60 +326,22 @@ class Environment:
                 cond = True
         return px, py
 
-    def _random_point_without_obstacles_and_robot(self, pxr, pyr, rr, r):
-        if self.dynamic_obstacles_x.size == 0:
-            print("No obstacles were found. Please load obstacles first.")
-            return -1
-
-        cond = False
-        while not cond:
-            cond = True
-            px = np.random.uniform(
-                low=self.env_min_size + r, high=self.env_max_size - r
-            )
-            py = np.random.uniform(
-                low=self.env_min_size + r, high=self.env_max_size - r
-            )
-
-            if (np.linalg.norm([px - pxr, py - pyr])) < 4:
-                cond = False
-                continue
-
-            for xc, yc, rc in zip(
-                self.dynamic_obstacles_x,
-                self.dynamic_obstacles_y,
-                self.dynamic_obstacles_radius,
-            ):
-                if (np.linalg.norm([px - xc, py - yc])) < rc + r:
-                    cond = False
-                    break
-
-        return px, py
-
-    def get_random_obstacles(
-        self, xr, yr, rr, is_goal=False, xg=0, yg=0, rg=0, n=0, r=0.3
-    ):
+    def get_random_obstacles(self, xr, yr, rr, xg=0, yg=0, rg=0, n=0, r=0.3):
         xcs = []
         ycs = []
         gcs = []
         rcs = n * [r]
 
-        if is_goal:
-            for _ in range(n):
-                px, py = self._random_point_without_robot_and_goal(
-                    xr, yr, rr, xg, yg, rg, r
-                )
-                xcs.append(px)
-                ycs.append(py)
-                px, py = self._random_point_without_robot_and_goal(
-                    xr, yr, rr, xg, yg, rg, r
-                )
-                gcs.append((px, py))
-        else:
-            for _ in range(n):
-                px, py = self._random_point_without_robot(xr, yr, rr, r)
-                xcs.append(px)
-                ycs.append(py)
+        for _ in range(n):
+            px, py = self._random_point_without_robot_and_goal(
+                xr, yr, rr, xg, yg, rg, r
+            )
+            xcs.append(px)
+            ycs.append(py)
+            px, py = self._random_point_without_robot_and_goal(
+                xr, yr, rr, xg, yg, rg, r
+            )
+            gcs.append((px, py))
 
         self.dynamic_obstacles_orig_x = np.array(xcs)
         self.dynamic_obstacles_orig_y = np.array(ycs)

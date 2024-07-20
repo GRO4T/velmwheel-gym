@@ -34,16 +34,13 @@ class Robot2dEnv(gym.Env):
     def __init__(
         self,
         dT=0.05,
-        is_goal=True,
         **kwargs,
     ):
         super().__init__()
 
         self._training_mode = kwargs["training_mode"]
         self._difficulty: NavigationDifficulty = kwargs["difficulty"]
-        self.robot = Robot2D(
-            dT=dT, is_render=True, is_goal=is_goal, difficulty=self._difficulty
-        )
+        self.robot = Robot2D(dT=dT, is_render=True, difficulty=self._difficulty)
         self._render_mode = kwargs.get("render_mode", None)
         self.steps = 0
         self._episode = 0
@@ -63,14 +60,14 @@ class Robot2dEnv(gym.Env):
         self.action_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(2,),
+            shape=(3,),
             dtype=np.float64,
         )
 
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
+            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
             dtype=np.float64,
         )
 
@@ -104,7 +101,7 @@ class Robot2dEnv(gym.Env):
     def is_final_goal(self) -> bool:
         return not self.robot.global_path.points
 
-    def _observe(self):
+    def _observe(self, alpha: float):
         self.robot.scanning()
 
         xls = self.robot.xls
@@ -143,23 +140,31 @@ class Robot2dEnv(gym.Env):
 
         obs.extend(ranges)
 
-        return np.array([1.0 if self.is_final_goal else 0.0] + obs)
+        return np.array([1.0 if self.is_final_goal else 0.0] + [alpha / np.pi] + obs)
 
     def step(self, action):
         self.steps += 1
 
         vx = ACTION_NORMALIZATION_FACTOR * action[0]
         vy = ACTION_NORMALIZATION_FACTOR * action[1]
-        w = 0.0
+        w = ACTION_NORMALIZATION_FACTOR * action[2]
         self.robot.step(vx, vy, w)
 
         num_passed_points = self.robot.global_path_segment.update(
             Point(*self.robot_position)
         )
 
+        target = (
+            self.robot.global_path_segment.points[0]
+            if self.robot.global_path_segment.points
+            else self.goal
+        )
+        alpha = _angle_between(self.robot_position, target, self.robot.thr)
+
         success, reward, terminated = calculate_reward(
             self.is_final_goal,
             Point(*self.robot_position),
+            alpha,
             self.goal,
             self.robot.is_crashed(),
             self._difficulty,
@@ -169,7 +174,7 @@ class Robot2dEnv(gym.Env):
             self.steps,
         )
 
-        obs = self._observe()
+        obs = self._observe(alpha)
 
         self._total_reward += reward
 
@@ -279,10 +284,42 @@ class Robot2dEnv(gym.Env):
             self.yr0 = self.robot.yr
             self.thr0 = self.robot.thr
 
-        return self._observe(), {}
+        target = (
+            self.robot.global_path_segment.points[0]
+            if self.robot.global_path_segment.points
+            else self.goal
+        )
+        alpha = _angle_between(self.robot_position, target, self.robot.thr)
+
+        return self._observe(alpha), {}
 
     def render(self, mode="human"):
         self.robot.render()
 
     def close(self):
         self.robot.close()
+
+
+def _angle_between(robot_pos, goal_pos, theta):
+    # Robot's position (x_r, y_r)
+    x_r, y_r = robot_pos
+
+    # Goal position (x_g, y_g)
+    x_g, y_g = goal_pos
+
+    # Robot's heading vector
+    R = np.array([np.cos(theta), np.sin(theta)])
+
+    # Goal direction vector
+    G = np.array([x_g - x_r, y_g - y_r])
+
+    # Normalize goal direction vector
+    G = G / np.linalg.norm(G)
+
+    # Calculate dot product
+    dot_product = np.dot(R, G)
+
+    # Calculate angle between the vectors
+    alpha = np.arccos(dot_product)
+
+    return alpha
