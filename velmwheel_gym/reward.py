@@ -1,7 +1,5 @@
 import logging
 
-import numpy as np
-
 from velmwheel_gym.global_guidance_path import GlobalGuidancePath
 from velmwheel_gym.types import NavigationDifficulty, Point
 
@@ -55,7 +53,7 @@ def calculate_reward(
         return True, reward, True
 
     reward = 0
-    if alpha < 0.4 or alpha > 2.7:
+    if alpha > 0.4:
         reward += MISALIGNMENT_PENALTY / max_episode_steps
 
     if num_passed_points > 0:
