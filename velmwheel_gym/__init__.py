@@ -40,6 +40,13 @@ register(
 )
 
 register(
+    id="Velmwheel2000-v0",
+    entry_point="velmwheel_gym.gazebo_env.env:VelmwheelEnv",
+    max_episode_steps=2000,
+    additional_wrappers=(MaxEpisodeStepsInjectionWrapper.wrapper_spec(),),
+)
+
+register(
     id="Velmwheel2D100-v0",
     entry_point="velmwheel_gym.two_dim_env.env:Robot2dEnv",
     max_episode_steps=100,

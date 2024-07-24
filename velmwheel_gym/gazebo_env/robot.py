@@ -25,7 +25,6 @@ ROBOT_POSE_SIMULATION_TOPIC = "/velmwheel/sim/pose"
 ROBOT_COLLISION_TOPIC = "/velmwheel/contacts"
 ODOM_LASER_POSE_TOPIC = "/velmwheel/odom/laser/pose"
 LASER_SCAN_MATCHER_SET_POSE_TOPIC = "/velmwheel/laser_scan_matcher/set_pose"
-NAVIGATION_INITIAL_POSE_TOPIC = "/initialpose"
 ENCODERS_SET_POSE_TOPIC = "/velmwheel/odom/encoders/set_pose"
 SET_ENTITY_STATE_TOPIC = "/set_entity_state"
 LIDAR_TOPIC = "/velmwheel/lidars/cloud/combined"
@@ -40,6 +39,7 @@ class VelmwheelRobot:
 
         self._is_collide: bool = False
         self._position: Optional[Point] = None
+        self._theta: float = None
         self._position_tstamp: float = 0.0
         self._lidar_pointcloud_raw: Optional[np.array] = None
         self._lidar_data: Optional[list[float]] = None
@@ -67,11 +67,6 @@ class VelmwheelRobot:
         self._movement_pub = self._node.create_publisher(
             Twist,
             ROBOT_MOVEMENT_TOPIC,
-            qos_profile=qos_profile_system_default,
-        )
-        self._nav_initial_position_pub = self._node.create_publisher(
-            PoseWithCovarianceStamped,
-            NAVIGATION_INITIAL_POSE_TOPIC,
             qos_profile=qos_profile_system_default,
         )
         self._encoders_set_pose_pub = self._node.create_publisher(
@@ -109,6 +104,11 @@ class VelmwheelRobot:
     def position(self) -> Point:
         """Current robot's position"""
         return self._position
+
+    @property
+    def theta(self) -> float:
+        """Current robot's orientation."""
+        return self._theta
 
     @property
     def position_tstamp(self) -> float:
@@ -159,7 +159,7 @@ class VelmwheelRobot:
     def real_time_factor(self, factor: float):
         self._real_time_factor = factor
 
-    def reset(self, starting_position: Point, timeout_sec: float = 10.0):
+    def reset(self, starting_position: Point, timeout_sec: float = 10.0) -> bool:
         """Resets robot's state."""
         start = time.time()
 
@@ -173,7 +173,7 @@ class VelmwheelRobot:
             rclpy.spin_once(self._node, timeout_sec=1.0)
             if time.time() - start > timeout_sec:
                 logger.warning("Failed to reset robot's state")
-                return
+                return False
 
         self._set_entity_pose(starting_position)
         self._set_laser_scan_matcher_pose(starting_position)
@@ -183,7 +183,9 @@ class VelmwheelRobot:
             rclpy.spin_once(self._node, timeout_sec=1.0)
             if time.time() - start > timeout_sec:
                 logger.warning("Failed to reset robot's state")
-                return
+                return False
+
+        return True
 
     def update(self):
         """Updates robot's state measurements."""
@@ -207,12 +209,13 @@ class VelmwheelRobot:
 
         motion_cmd.linear.x = action[0]
         motion_cmd.linear.y = action[1]
+        motion_cmd.angular.z = action[2]
 
         self._movement_pub.publish(motion_cmd)
 
     def stop(self):
         """Stops robot's movement."""
-        self.move([0.0, 0.0])
+        self.move([0.0, 0.0, 0.0])
 
     def _stale_measurement_recovery(self):
         logger.warning("Trying to recover from stale measurements")
@@ -245,6 +248,18 @@ class VelmwheelRobot:
             logger.debug(f"Position after reset: {message.pose.position}")
         p = message.pose.position
         self._position = Point(x=p.x, y=p.y)
+
+        def quaternion_to_euler_z(q):
+            q.w, q.x, q.y, q.z
+            t1 = 2.0 * (q.w * q.z + q.x * q.y)
+            t2 = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+            return np.arctan2(t1, t2)
+
+        self._theta = quaternion_to_euler_z(message.pose.orientation)
+        while self._theta <= -np.pi:
+            self._theta += 2 * np.pi
+        while self._theta > np.pi:
+            self._theta -= 2 * np.pi
         self._position_tstamp = time.time()
 
     def _lidar_callback(self, message: PointCloud2):
@@ -272,13 +287,6 @@ class VelmwheelRobot:
         self._prev_lidar_data = copy.deepcopy(self._lidar_data)
 
         self._lidar_tstamp = time.time()
-
-    def _publish_navigation_initial_pose(self):
-        initial_pose = PoseWithCovarianceStamped()
-        initial_pose.header.frame_id = "map"
-        initial_pose.pose.pose.position.x = self._position.x
-        initial_pose.pose.pose.position.y = self._position.y
-        self._nav_initial_position_pub.publish(initial_pose)
 
     def _set_entity_pose(self, position: Point):
         """Sets robot's position in the Gazebo simulation."""

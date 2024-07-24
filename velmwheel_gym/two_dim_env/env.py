@@ -8,6 +8,7 @@ import gymnasium as gym
 import numpy as np
 
 import wandb
+from velmwheel_gym.base_env import angle_between_robot_and_goal
 from velmwheel_gym.constants import (
     COORDINATES_NORMALIZATION_FACTOR,
     GLOBAL_GUIDANCE_OBSERVATION_POINTS,
@@ -159,7 +160,9 @@ class Robot2dEnv(gym.Env):
             if self.robot.global_path_segment.points
             else self.goal
         )
-        alpha = _angle_between(self.robot_position, target, self.robot.thr)
+        alpha = angle_between_robot_and_goal(
+            self.robot_position, target, self.robot.thr
+        )
 
         success, reward, terminated = calculate_reward(
             self.is_final_goal,
@@ -223,10 +226,10 @@ class Robot2dEnv(gym.Env):
             if (
                 idx < len(NAVIGATION_DIFFICULTIES) - 1
                 and len(self._reward_buffer) == STATS_BUFFER_SIZE
-                and self._global_success_rate > 0.7
+                and self._global_success_rate > 0.8
             ):
                 logger.info(
-                    f"Mean reward ({self._mean_reward}) > 0.7. Advancing to the next level."
+                    f"Mean reward ({self._mean_reward}) > 0.8. Advancing to the next level."
                 )
                 self._reward_buffer.clear()
                 self._local_success_buffer.clear()
@@ -239,7 +242,11 @@ class Robot2dEnv(gym.Env):
                 self.robot.global_path._difficulty = self._difficulty
                 self.robot.global_path_segment._difficulty = self._difficulty
 
-        if self._episode % 1 == 0 and self._render_mode == "human":
+        if (
+            self._training_mode
+            and self._episode % 50 == 0
+            and self._render_mode == "human"
+        ):
             self.render()
 
         if self._training_mode:
@@ -289,7 +296,9 @@ class Robot2dEnv(gym.Env):
             if self.robot.global_path_segment.points
             else self.goal
         )
-        alpha = _angle_between(self.robot_position, target, self.robot.thr)
+        alpha = angle_between_robot_and_goal(
+            self.robot_position, target, self.robot.thr
+        )
 
         return self._observe(alpha), {}
 
@@ -298,28 +307,3 @@ class Robot2dEnv(gym.Env):
 
     def close(self):
         self.robot.close()
-
-
-def _angle_between(robot_pos, goal_pos, theta):
-    # Robot's position (x_r, y_r)
-    x_r, y_r = robot_pos
-
-    # Goal position (x_g, y_g)
-    x_g, y_g = goal_pos
-
-    # Robot's heading vector
-    R = np.array([np.cos(theta), np.sin(theta)])
-
-    # Goal direction vector
-    G = np.array([x_g - x_r, y_g - y_r])
-
-    # Normalize goal direction vector
-    G = G / np.linalg.norm(G)
-
-    # Calculate dot product
-    dot_product = np.dot(R, G)
-
-    # Calculate angle between the vectors
-    alpha = np.arccos(dot_product)
-
-    return alpha

@@ -1,6 +1,6 @@
 import configparser
 import math
-import subprocess
+import time
 
 import gymnasium as gym
 
@@ -17,10 +17,15 @@ from velmwheel_rl.common import ParameterReader, bootstrap_argument_parser, load
 parser = bootstrap_argument_parser()
 parser.add_argument("--goal_x", type=float, help="Goal x coordinate")
 parser.add_argument("--goal_y", type=float, help="Goal y coordinate")
+parser.add_argument("--start_x", type=float, help="Start x coordinate")
+parser.add_argument("--start_y", type=float, help="Start y coordinate")
+parser.add_argument(
+    "--render", type=bool, help="Render the environment", required=False
+)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
-config.read(["config.ini"])
+config.read([args.config])
 param_reader = ParameterReader("tester", args, config)
 
 # pylint: disable=duplicate-code
@@ -33,6 +38,9 @@ navigation_difficulty_level = int(param_reader.read("navigation_difficulty_level
 real_time_factor = float(param_reader.read("real_time_factor"))
 goal_x = float(param_reader.read("goal_x"))
 goal_y = float(param_reader.read("goal_y"))
+start_x = float(param_reader.read("start_x"))
+start_y = float(param_reader.read("start_y"))
+render = param_reader.read("render")
 
 init_logging(log_level)
 
@@ -49,7 +57,7 @@ env = gym.make(
     gym_env,
     difficulty=difficulty,
     real_time_factor=real_time_factor,
-    render_mode="human",
+    render_mode="human" if render == "true" else None,
     training_mode=False,
 )
 
@@ -59,12 +67,13 @@ model, _ = load_model(
 
 obs, _ = env.reset(
     options={
-        "starting_position": starting_position,
+        "starting_position": Point(start_x, start_y),
         "goal": Point(goal_x, goal_y),
     }
 )
 
 steps = 0
+start = time.time()
 while True:
     action, _ = model.predict(obs, deterministic=True)
 
@@ -86,21 +95,19 @@ while True:
     if dist_to_goal < min_dist_to_goal:
         min_dist_to_goal = dist_to_goal
 
-    env.render()
-
     if dist_to_goal < difficulty.goal_reached_threshold:
-        env.reset()
-        value = input("Next goal? (y/n): ")
-        if value.lower() == "n":
-            subprocess.run("./kill_sim.sh", shell=True, check=True)
-            break
-        obs, _ = env.reset(
-            options={
-                "starting_position": starting_position,
-                "goal": Point(goal_x, goal_y),
-            }
-        )
+        obs, _ = env.reset()
     steps += 1
-    if steps > 100:
+    if steps > env.env.max_episode_steps:
         steps = 0
         env.reset()
+
+    if render == "true":
+        env.render()
+
+    end = time.time()
+    elapsed = end - start
+    start = end
+    if elapsed < 0.016:
+        time.sleep(0.016 - elapsed)
+    print(f"fps: {1 / elapsed}")

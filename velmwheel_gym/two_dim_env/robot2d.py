@@ -6,6 +6,7 @@ from typing import NamedTuple
 import numpy as np
 from matplotlib import pyplot as plt
 
+from velmwheel_gym.base_env import interpolate_coordinates
 from velmwheel_gym.constants import LIDAR_DATA_SIZE
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
@@ -143,7 +144,7 @@ class Robot2D:
                     self.env.dynamic_obstacles_orig_y[i],
                 )
                 tx, ty = self.env.dynamic_obstacles_goals[i]
-                new_x, new_y = _interpolate_coordinates(x, y, tx, ty, self._time)
+                new_x, new_y = interpolate_coordinates(x, y, tx, ty, self._time)
                 self.env.dynamic_obstacles_x[i] = new_x
                 self.env.dynamic_obstacles_y[i] = new_y
 
@@ -349,9 +350,3 @@ class Environment:
         self.dynamic_obstacles_y = np.array(ycs)
         self.dynamic_obstacles_radius = np.array(rcs)
         self.dynamic_obstacles_goals = np.array(gcs)
-
-
-def _interpolate_coordinates(x1, y1, x2, y2, t):
-    x = x1 + t * (x2 - x1)
-    y = y1 + t * (y2 - y1)
-    return x, y
