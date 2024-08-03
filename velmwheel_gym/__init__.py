@@ -54,8 +54,22 @@ register(
 )
 
 register(
+    id="Velmwheel2D250-v0",
+    entry_point="velmwheel_gym.two_dim_env.env:Robot2dEnv",
+    max_episode_steps=250,
+    additional_wrappers=(MaxEpisodeStepsInjectionWrapper.wrapper_spec(),),
+)
+
+register(
     id="Velmwheel2D500-v0",
     entry_point="velmwheel_gym.two_dim_env.env:Robot2dEnv",
     max_episode_steps=500,
+    additional_wrappers=(MaxEpisodeStepsInjectionWrapper.wrapper_spec(),),
+)
+
+register(
+    id="Velmwheel2D1000-v0",
+    entry_point="velmwheel_gym.two_dim_env.env:Robot2dEnv",
+    max_episode_steps=1000,
     additional_wrappers=(MaxEpisodeStepsInjectionWrapper.wrapper_spec(),),
 )

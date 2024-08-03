@@ -1,5 +1,6 @@
 import configparser
 import math
+import pickle
 import time
 
 import gymnasium as gym
@@ -22,6 +23,27 @@ parser.add_argument("--start_y", type=float, help="Start y coordinate")
 parser.add_argument(
     "--render", type=bool, help="Render the environment", required=False
 )
+parser.add_argument(
+    "--generate_next_goal",
+    type=str,
+    help="Generate a new goal",
+    required=False,
+    default="false",
+)
+parser.add_argument(
+    "--save_footprint",
+    type=str,
+    help="Save the robot footprint",
+    required=False,
+    default="false",
+)
+parser.add_argument(
+    "--time_limit",
+    type=int,
+    help="Time limit for the episode",
+    required=False,
+    default=3600,
+)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -41,6 +63,11 @@ goal_y = float(param_reader.read("goal_y"))
 start_x = float(param_reader.read("start_x"))
 start_y = float(param_reader.read("start_y"))
 render = param_reader.read("render")
+generate_next_goal = (
+    True if param_reader.read("generate_next_goal") == "true" else False
+)
+save_footprint = True if param_reader.read("save_footprint") == "true" else False
+time_limit = int(param_reader.read("time_limit"))
 
 init_logging(log_level)
 
@@ -72,12 +99,27 @@ obs, _ = env.reset(
     }
 )
 
+footprints = {"position": [], "orientation": [], "time": [], "obstacles": []}
 steps = 0
 start = time.time()
+total = 0.0
 while True:
     action, _ = model.predict(obs, deterministic=True)
 
     obs, reward, terminated, truncated, info = env.step(action)
+    if terminated:
+        steps = 0
+
+    footprints["position"].append(env.env.robot_position)
+    footprints["time"].append(start)
+
+    # footprints["obstacles"].append(
+    #     [(x, y) for x, y in zip(env.env.robot.env.dynamic_obstacles_x, env.env.robot.env.dynamic_obstacles_y)]
+    # )
+
+    if terminated and reward < 0:
+        print("Collision detected!")
+        break
 
     print("----------------------------------------------")
     print(f"{action=}")
@@ -96,11 +138,20 @@ while True:
         min_dist_to_goal = dist_to_goal
 
     if dist_to_goal < difficulty.goal_reached_threshold:
-        obs, _ = env.reset()
+        print("Goal reached!")
+        if generate_next_goal:
+            obs, _ = env.reset()
+        else:
+            break
+
     steps += 1
     if steps > env.env.max_episode_steps:
-        steps = 0
-        env.reset()
+        print("Max steps reached!")
+        if not env.env.is_final_goal or (env.env.is_final_goal and generate_next_goal):
+            steps = 0
+            env.reset()
+        else:
+            break
 
     if render == "true":
         env.render()
@@ -108,6 +159,13 @@ while True:
     end = time.time()
     elapsed = end - start
     start = end
-    if elapsed < 0.016:
-        time.sleep(0.016 - elapsed)
+    if elapsed < 0.050:
+        time.sleep(0.050 - elapsed)
     print(f"fps: {1 / elapsed}")
+
+    if total > time_limit:
+        print("Time limit reached!")
+        break
+
+with open("footprint.pkl", "wb") as f:
+    pickle.dump(footprints, f)

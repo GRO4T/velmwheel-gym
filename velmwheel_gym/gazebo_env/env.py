@@ -79,7 +79,7 @@ class VelmwheelEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
+            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
             dtype=np.float64,
         )
         self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
@@ -279,6 +279,7 @@ class VelmwheelEnv(gym.Env):
 
         success, reward, terminated = calculate_reward(
             self.is_final_goal,
+            self.prev_robot_position,
             self._robot.position,
             alpha,
             self.sub_goal,
@@ -360,6 +361,8 @@ class VelmwheelEnv(gym.Env):
         else:
             logger.warning(f"Step time ({step_time}) exceeded: {elapsed}")
 
+        self.prev_robot_position = self.robot_position
+
         if self.render_mode == "human":
             self.render()
 
@@ -437,6 +440,8 @@ class VelmwheelEnv(gym.Env):
         alpha = angle_between_robot_and_goal(
             self.robot_position, target, self._robot.theta
         )
+
+        self.prev_robot_position = self.robot_position
 
         return self._observe(alpha), {}
 
@@ -589,9 +594,9 @@ class VelmwheelEnv(gym.Env):
 
         # normalize position and goal coordinates
         obs = [o / COORDINATES_NORMALIZATION_FACTOR for o in obs]
-        obs.extend(self._robot.normalized_lidar_data)
+        obs.extend([2 * scan - 1 for scan in self._robot.normalized_lidar_data])
 
-        return np.array([1.0 if self.is_final_goal else 0.0] + [alpha / np.pi] + obs)
+        return np.array([self._robot.theta / np.pi] + obs)
 
     def _publish_goal(self):
         goal = PoseStamped()

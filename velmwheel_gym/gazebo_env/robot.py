@@ -207,8 +207,8 @@ class VelmwheelRobot:
         self._is_collide = False
         motion_cmd = Twist()
 
-        motion_cmd.linear.x = action[0]
-        motion_cmd.linear.y = action[1]
+        motion_cmd.linear.x = 0.5 * action[0]
+        motion_cmd.linear.y = 0.5 * action[1]
         motion_cmd.angular.z = action[2]
 
         self._movement_pub.publish(motion_cmd)

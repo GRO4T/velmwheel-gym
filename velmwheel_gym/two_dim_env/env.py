@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class Robot2dEnv(gym.Env):
     def __init__(
         self,
-        dT=0.05,
+        dT=0.050,
         **kwargs,
     ):
         super().__init__()
@@ -68,7 +68,7 @@ class Robot2dEnv(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
+            shape=(3 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,),
             dtype=np.float64,
         )
 
@@ -117,7 +117,9 @@ class Robot2dEnv(gym.Env):
         for xl, yl in zip(xls, yls):
             ranges.append(math.dist(self.robot_position, (xl, yl)))
         # clamp and normalize LIDAR ranges
-        ranges = [min(r, self.robot.max_range) / self.robot.max_range for r in ranges]
+        ranges = [
+            2 * min(r, self.robot.max_range) / self.robot.max_range - 1 for r in ranges
+        ]
 
         goal_x_relative = self.goal.x - self.robot_position[0]
         goal_y_relative = self.goal.y - self.robot_position[1]
@@ -141,14 +143,15 @@ class Robot2dEnv(gym.Env):
 
         obs.extend(ranges)
 
-        return np.array([1.0 if self.is_final_goal else 0.0] + [alpha / np.pi] + obs)
+        return np.array([self.robot.thr / np.pi] + obs)
 
     def step(self, action):
         self.steps += 1
 
-        vx = ACTION_NORMALIZATION_FACTOR * action[0]
-        vy = ACTION_NORMALIZATION_FACTOR * action[1]
-        w = ACTION_NORMALIZATION_FACTOR * action[2]
+        vx = 0.5 * action[0]
+        vy = 0.5 * action[1]
+        w = action[2]
+        self.prev_robot_position = Point(*self.robot_position)
         self.robot.step(vx, vy, w)
 
         num_passed_points = self.robot.global_path_segment.update(
@@ -166,6 +169,7 @@ class Robot2dEnv(gym.Env):
 
         success, reward, terminated = calculate_reward(
             self.is_final_goal,
+            self.prev_robot_position,
             Point(*self.robot_position),
             alpha,
             self.goal,
@@ -184,10 +188,12 @@ class Robot2dEnv(gym.Env):
         if terminated:
             self._generate_next_goal = True
             if success:
+                self._local_success_buffer[-1] = 1
                 if self.is_final_goal:
-                    self._global_success_buffer.append(1)
+                    self._global_success_buffer[-1] = 1
                     logger.debug("Successfully reached the final goal")
-                    self.robot._start_position_and_goal_generator.register_goal_reached()
+                    if self._training_mode:
+                        self.robot._start_position_and_goal_generator.register_goal_reached()
                 else:
                     logger.debug("Successfully reached global path segment")
                     (
@@ -200,10 +206,7 @@ class Robot2dEnv(gym.Env):
                         self._difficulty,
                     )
                     self._generate_next_goal = False
-            else:
-                self._global_success_buffer.append(0)
             self._reward_buffer.append(self._total_reward)
-            self._local_success_buffer.append(1 if success else 0)
             self._mean_reward = (
                 np.mean(self._reward_buffer)
                 if len(self._reward_buffer) == STATS_BUFFER_SIZE
@@ -226,7 +229,7 @@ class Robot2dEnv(gym.Env):
             if (
                 idx < len(NAVIGATION_DIFFICULTIES) - 1
                 and len(self._reward_buffer) == STATS_BUFFER_SIZE
-                and self._global_success_rate > 0.8
+                and self._global_success_rate > 0.7
             ):
                 logger.info(
                     f"Mean reward ({self._mean_reward}) > 0.8. Advancing to the next level."
@@ -241,10 +244,11 @@ class Robot2dEnv(gym.Env):
                 self.robot._difficulty = self._difficulty
                 self.robot.global_path._difficulty = self._difficulty
                 self.robot.global_path_segment._difficulty = self._difficulty
+                self.robot.first_render = True
 
         if (
             self._training_mode
-            and self._episode % 50 == 0
+            and self._episode % 10 == 0
             and self._render_mode == "human"
         ):
             self.render()
@@ -264,27 +268,29 @@ class Robot2dEnv(gym.Env):
 
     def reset(self, seed=None, options=None):  # Return to initial state
         if self.steps >= self.max_episode_steps:
-            if self.is_final_goal:
-                logger.debug("Did not reach the final goal in time")
-                self._generate_next_goal = True
-            else:
-                logger.debug("Did not reach global path segment in time")
-                (
-                    self.robot.global_path.points,
-                    self.robot.global_path_segment,
-                ) = next_segment(
-                    self.robot.global_path.points,
-                    self.robot.global_path_segment.points,
-                    Point(*self.robot_position),
-                    self._difficulty,
-                )
+            self._generate_next_goal = True
+            # if self.is_final_goal:
+            #     logger.debug("Did not reach the final goal in time")
+            #     self._generate_next_goal = True
+            # else:
+            #     logger.debug("Did not reach global path segment in time")
+            #     (
+            #         self.robot.global_path.points,
+            #         self.robot.global_path_segment,
+            #     ) = next_segment(
+            #         self.robot.global_path.points,
+            #         self.robot.global_path_segment.points,
+            #         Point(*self.robot_position),
+            #         self._difficulty,
+            #     )
 
         self.steps = 0
         self._total_reward = 0.0
 
         if self._generate_next_goal:
+            self._global_success_buffer.append(0)
             self._generate_next_goal = False
-            self.robot.reset()
+            self.robot.reset(options)
             self._episode += 1
 
             self.xr0 = self.robot.xr
@@ -299,6 +305,8 @@ class Robot2dEnv(gym.Env):
         alpha = angle_between_robot_and_goal(
             self.robot_position, target, self.robot.thr
         )
+
+        self._local_success_buffer.append(0)
 
         return self._observe(alpha), {}
 

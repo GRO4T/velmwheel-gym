@@ -120,16 +120,11 @@ def create_model(
             action_noise = OrnsteinUhlenbeckActionNoiseWithDecay(
                 mean=np.zeros(n_actions),
                 sigma=1.0 * np.ones(n_actions),
-                decay=0.998,
                 target_sigma=0.1 * np.ones(n_actions),
-                delay_decay_for=int(param_reader.read("learning_starts", "TD3"))
-                - 200000,
+                decay_steps=50000,
             )
-            # policy_kwargs = dict(
-            #     net_arch=dict(pi=[400, 300], qf=[200, 200]),
-            # )
             policy_kwargs = dict(
-                # optimizer_class=torch.optim.RMSprop,
+                # net_arch=dict(pi=[256], qf=[128]),
             )
             model = TD3(
                 "MlpPolicy",
@@ -145,10 +140,11 @@ def create_model(
                 optimize_memory_usage=True,
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
                 policy_kwargs=policy_kwargs,
+                train_freq=(1, "step"),
             )
 
-            model.actor.optimizer.param_groups[0]["weight_decay"] = 0.00001
-            model.critic.optimizer.param_groups[0]["weight_decay"] = 0.00001
+            # model.actor.optimizer.param_groups[0]["weight_decay"] = 0.00001
+            # model.critic.optimizer.param_groups[0]["weight_decay"] = 0.00001
 
             model.actor.optimizer.param_groups[0]["lr"] = float(
                 param_reader.read("actor_lr", "TD3")
@@ -157,17 +153,24 @@ def create_model(
                 param_reader.read("critic_lr", "TD3")
             )
         case "PPO":
-            # policy_kwargs = dict(net_arch=dict(pi=[512, 512], vf=[512, 512]))
+            policy_kwargs = dict(
+                # net_arch=dict(pi=[256], vf=[128])
+            )
             model = PPO(
                 "MlpPolicy",
                 env,
                 verbose=1,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                # policy_kwargs=policy_kwargs,
+                policy_kwargs=policy_kwargs,
                 gamma=float(param_reader.read("gamma", "PPO")),
-                # n_steps=4096,
+                n_steps=int(param_reader.read("n_steps", "PPO")),
+                learning_rate=float(param_reader.read("learning_rate", "PPO")),
+                batch_size=int(param_reader.read("batch_size", "PPO")),
             )
+
+            model.policy.optimizer.param_groups[0]["weight_decay"] = 0.00001
+
         case "SAC":
             model = SAC(
                 "MlpPolicy",

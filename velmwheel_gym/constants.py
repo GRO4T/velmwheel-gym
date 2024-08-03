@@ -1,7 +1,7 @@
 from velmwheel_gym.types import NavigationDifficulty
 
 # Step time in seconds at real time factor 1.0
-BASE_STEP_TIME = 0.016
+BASE_STEP_TIME = 0.050
 
 # Number of lidar rays
 LIDAR_DATA_SIZE = 90
@@ -16,31 +16,31 @@ COORDINATES_NORMALIZATION_FACTOR = 20.0
 NAVIGATION_DIFFICULTIES = [
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        driving_in_path_tolerance=0.25,
         dynamic_obstacle_count=0,
         dynamic_obstacle_motion=False,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        driving_in_path_tolerance=0.25,
         dynamic_obstacle_count=5,
         dynamic_obstacle_motion=False,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        driving_in_path_tolerance=0.25,
         dynamic_obstacle_count=10,
         dynamic_obstacle_motion=False,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        driving_in_path_tolerance=0.25,
         dynamic_obstacle_count=20,
         dynamic_obstacle_motion=False,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        driving_in_path_tolerance=0.25,
         dynamic_obstacle_count=20,
         dynamic_obstacle_motion=True,
     ),

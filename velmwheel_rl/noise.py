@@ -33,19 +33,16 @@ class OrnsteinUhlenbeckActionNoiseWithDecay(ActionNoise):
         dt: float = 1e-2,
         initial_noise: Optional[np.ndarray] = None,
         dtype: DTypeLike = np.float32,
-        decay: float = 0.998,
-        decay_rate: int = 500,
-        delay_decay_for: int = 0,
+        decay_steps: int = 5e5,
     ) -> None:
         self._theta = theta
         self._mu = mean
         self._sigma = sigma
-        self._target_sigma = target_sigma
+        self._initial_sigma = copy.deepcopy(sigma)
+        self._target_sigma = copy.deepcopy(target_sigma)
         self._dt = dt
         self._dtype = dtype
-        self._decay = decay
-        self._decay_rate = decay_rate
-        self._delay_decay_for = delay_decay_for
+        self._decay_steps = decay_steps
         self._calls = 0
         self.initial_noise = initial_noise
         self.noise_prev = np.zeros_like(self._mu)
@@ -60,12 +57,9 @@ class OrnsteinUhlenbeckActionNoiseWithDecay(ActionNoise):
         )
 
         self._calls += 1
-        if self._calls > self._delay_decay_for and self._calls % self._decay_rate == 0:
-            if (self._sigma * self._decay < self._target_sigma).any():
-                self._sigma = copy.deepcopy(self._target_sigma)
-            else:
-                self._sigma *= self._decay
-            logger.trace(f"{self._sigma=}")
+        t = min(1.0, self._calls / self._decay_steps)
+        self._sigma = self._initial_sigma * (1 - t) + self._target_sigma * t
+        logger.trace(f"{self._sigma=}")
 
         self.noise_prev = noise
         return noise.astype(self._dtype)

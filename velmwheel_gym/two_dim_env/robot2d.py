@@ -1,6 +1,9 @@
 """ Based on: https://github.com/EmanuelSamir/simple-2d-robot-lidar/blob/main/robot2d/robot2d.py """
 
 import copy
+import logging
+import os
+import pickle
 from typing import NamedTuple
 
 import numpy as np
@@ -17,6 +20,8 @@ from velmwheel_gym.two_dim_env.planner import AStarPlanner
 from velmwheel_gym.types import NavigationDifficulty, Point
 
 from .utils import *
+
+logger = logging.getLogger(__name__)
 
 
 class Robot2D:
@@ -66,11 +71,25 @@ class Robot2D:
 
         self.global_path: GlobalGuidancePath = None
         self.global_path_segment: GlobalGuidancePath = None
+        if os.path.exists("state/nav2_cache.pkl"):
+            with open("state/nav2_cache.pkl", "rb") as f:
+                self._global_path_cache = pickle.load(f)
+            logger.debug("Loaded global path cache")
+        else:
+            self._global_path_cache: dict[tuple[Point, Point], GlobalGuidancePath] = {}
 
-    def reset(self):
-        self._start_position_and_goal_generator.generate_next()
+    def reset(self, options=None):
+        if options and "goal" in options and "starting_position" in options:
+            self._start_position_and_goal_generator._starting_position = options[
+                "starting_position"
+            ]
+            self._start_position_and_goal_generator._goal = options["goal"]
+        else:
+            self._start_position_and_goal_generator.generate_next()
         self.xg = self._start_position_and_goal_generator.goal.x
         self.yg = self._start_position_and_goal_generator.goal.y
+        if getattr(self, "robot_goal", None):
+            self.robot_goal.center = (self.xg, self.yg)
         self.xr = self._start_position_and_goal_generator.starting_position.x
         self.yr = self._start_position_and_goal_generator.starting_position.y
         self.thr = 0.0
@@ -79,51 +98,69 @@ class Robot2D:
         self.xls = []
         self.yls = []
 
-        is_path_to_goal = False
-        while not is_path_to_goal:
-            self.env.get_random_obstacles(
-                self.xr,
-                self.yr,
-                self.rr,
-                self.xg,
-                self.yg,
-                self.rg,
-                self._difficulty.dynamic_obstacle_count,
+        if self._difficulty.dynamic_obstacle_count > 0:
+            is_path_to_goal = False
+            while not is_path_to_goal:
+                self.env.get_random_obstacles(
+                    self.xr,
+                    self.yr,
+                    self.rr,
+                    self.xg,
+                    self.yg,
+                    self.rg,
+                    self._difficulty.dynamic_obstacle_count,
+                )
+                o_dynamic_grid_x = copy.deepcopy(self.env.o_static_grid_x)
+                o_dynamic_grid_y = copy.deepcopy(self.env.o_static_grid_y)
+
+                for ox, oy in zip(
+                    self.env.dynamic_obstacles_x, self.env.dynamic_obstacles_y
+                ):
+                    o_dynamic_grid_x.append(ox)
+                    o_dynamic_grid_y.append(oy)
+                    o_dynamic_grid_x.append(ox + 0.2)
+                    o_dynamic_grid_y.append(oy)
+                    o_dynamic_grid_x.append(ox - 0.2)
+                    o_dynamic_grid_y.append(oy)
+                    o_dynamic_grid_x.append(ox)
+                    o_dynamic_grid_y.append(oy + 0.2)
+                    o_dynamic_grid_x.append(ox)
+                    o_dynamic_grid_y.append(oy - 0.2)
+
+                a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.98)
+                px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
+                if len(px) > 1:
+                    is_path_to_goal = True
+
+        if (
+            Point(self.xr, self.yr),
+            Point(self.xg, self.yg),
+        ) in self._global_path_cache:
+            logger.debug("Using cached global path")
+            self.global_path = copy.deepcopy(
+                self._global_path_cache[
+                    (Point(self.xr, self.yr), Point(self.xg, self.yg))
+                ]
             )
-            o_dynamic_grid_x = copy.deepcopy(self.env.o_static_grid_x)
-            o_dynamic_grid_y = copy.deepcopy(self.env.o_static_grid_y)
-
-            for ox, oy in zip(
-                self.env.dynamic_obstacles_x, self.env.dynamic_obstacles_y
-            ):
-                o_dynamic_grid_x.append(ox)
-                o_dynamic_grid_y.append(oy)
-                o_dynamic_grid_x.append(ox + 0.2)
-                o_dynamic_grid_y.append(oy)
-                o_dynamic_grid_x.append(ox - 0.2)
-                o_dynamic_grid_y.append(oy)
-                o_dynamic_grid_x.append(ox)
-                o_dynamic_grid_y.append(oy + 0.2)
-                o_dynamic_grid_x.append(ox)
-                o_dynamic_grid_y.append(oy - 0.2)
-
-            a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.98)
+        else:
+            logger.debug("Calculating new global path")
+            a_star = AStarPlanner(
+                self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.98
+            )
             px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
-            if len(px) > 1:
-                is_path_to_goal = True
 
-        a_star = AStarPlanner(
-            self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.98
-        )
-        px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
-
-        points = [Point(x, y) for x, y in zip(px, py)]
-        points = points[
-            ::-1
-        ]  # This implementation of A* returns the path in reverse order
-        self.global_path = GlobalGuidancePath(
-            Point(self.xr, self.yr), points, self._difficulty
-        )
+            points = [Point(x, y) for x, y in zip(px, py)]
+            points = points[
+                ::-1
+            ]  # This implementation of A* returns the path in reverse order
+            self.global_path = GlobalGuidancePath(
+                Point(self.xr, self.yr), points, self._difficulty
+            )
+            self._global_path_cache[
+                (Point(self.xr, self.yr), Point(self.xg, self.yg))
+            ] = copy.deepcopy(self.global_path)
+            with open("state/nav2_cache.pkl", "wb") as f:
+                pickle.dump(self._global_path_cache, f)
         self.global_path.points, self.global_path_segment = next_segment(
             self.global_path.points, [], Point(self.xr, self.yr), self._difficulty
         )
@@ -169,84 +206,112 @@ class Robot2D:
         return self._lidar.scan()
 
     def render(self):
-        # If render enabled,
         if self.is_render and self.first_render:
             plt.ion()
             self.fig, self.ax = plt.subplots(figsize=(10, 10))
             self.ax.set_xlim((-9, 9))
             self.ax.set_ylim((-9, 9))
-            circle = plt.Circle((self.xr, self.yr), self.rr, color="r", fill=True)
-            self.ax.add_patch(circle)
-            plt.pause(0.5)
-            self.first_render = False
-
-        if self.is_render:
-            xcs = self.env.dynamic_obstacles_x
-            ycs = self.env.dynamic_obstacles_y
-            rcs = self.env.dynamic_obstacles_radius
-            self.ax.clear()
-            self.ax.set_xlim((-9, 9))
-            self.ax.set_ylim((-9, 9))
-
-            # Draw robot
-            circle = plt.Circle(
-                (self.xr, self.yr), self.rr, color="r", fill=True, zorder=10
-            )
-            self.ax.add_patch(circle)
-            points = [
-                [
-                    self.rr * np.cos(self.thr + np.deg2rad(140)) + self.xr,
-                    self.rr * np.sin(self.thr + np.deg2rad(140)) + self.yr,
-                ],
-                [
-                    self.rr * np.cos(self.thr) + self.xr,
-                    self.rr * np.sin(self.thr) + self.yr,
-                ],
-                [
-                    self.rr * np.cos(self.thr - np.deg2rad(140)) + self.xr,
-                    self.rr * np.sin(self.thr - np.deg2rad(140)) + self.yr,
-                ],
-            ]
-            triag = plt.Polygon(points, zorder=20)
-            self.ax.add_patch(triag)
 
             # Draw static walls
+            self.static_walls = []
             for wall in self.env.static_walls:
-                wall = plt.Rectangle(
+                wall_patch = plt.Rectangle(
                     (wall.x, wall.y),
                     wall.width,
                     wall.height,
                     color="b",
                     fill=True,
                 )
-                self.ax.add_patch(wall)
-
-            # Draw dynamic obstacles
-            for xc, yc, rc in zip(xcs, ycs, rcs):
-                circle = plt.Circle((xc, yc), rc, color="b", fill=True)
-                self.ax.add_patch(circle)
+                self.ax.add_patch(wall_patch)
+                self.static_walls.append(wall_patch)
 
             # Draw global guidance path
             px = [p.x for p in self.global_path.points]
             py = [p.y for p in self.global_path.points]
-            plt.plot(px, py, ".g")
+            (self.global_path_line,) = self.ax.plot(px, py, ".g")
+
             sx = [s.x for s in self.global_path_segment.points]
             sy = [s.y for s in self.global_path_segment.points]
-            plt.plot(sx, sy, ".y")
+            (self.global_path_segment_line,) = self.ax.plot(sx, sy, ".y")
 
             # Draw goal
-            circle = plt.Circle(
+            self.robot_goal = plt.Circle(
                 (self.xg, self.yg), self.rg, color="g", fill=True, zorder=10
             )
-            self.ax.add_patch(circle)
+            self.ax.add_patch(self.robot_goal)
 
-            # Draw lidar scans
-            for xl, yl in zip(self.xls, self.yls):
-                self.ax.plot([self.xr, xl], [self.yr, yl], color="gray")
-            self.ax.scatter(self.xls, self.yls, color="r")
+            # Draw robot
+            self.robot_circle = plt.Circle(
+                (self.xr, self.yr), self.rr, color="r", fill=True, zorder=10
+            )
+            self.ax.add_patch(self.robot_circle)
+            self.robot_triangle = plt.Polygon(self._get_robot_triangle(), zorder=20)
+            self.ax.add_patch(self.robot_triangle)
 
-            plt.pause(0.02)
-            self.fig.canvas.draw()
+            # Draw dynamic obstacles
+            self.dynamic_obstacles = []
+            for x, y, r in zip(
+                self.env.dynamic_obstacles_x,
+                self.env.dynamic_obstacles_y,
+                self.env.dynamic_obstacles_radius,
+            ):
+                obstacle = plt.Circle((x, y), r, color="b", fill=True)
+                self.ax.add_patch(obstacle)
+                self.dynamic_obstacles.append(obstacle)
+
+            # Draw lidar
+            # self.lidar_scans = []
+            # for xl, yl in zip(self.xls, self.yls):
+            #     self.lidar_scans.append(self.ax.plot([self.xr, xl], [self.yr, yl], color="gray"))
+            # self.lidar_points = self.ax.scatter(self.xls, self.yls, color="r")
+
+            plt.pause(0.5)
+            self.first_render = False
+
+        if self.is_render:
+            # Update robot position
+            self.robot_circle.center = (self.xr, self.yr)
+            self.robot_triangle.set_xy(self._get_robot_triangle())
+
+            # Update dynamic obstacles
+            for obstacle, (x, y) in zip(
+                self.dynamic_obstacles,
+                zip(self.env.dynamic_obstacles_x, self.env.dynamic_obstacles_y),
+            ):
+                obstacle.center = (x, y)
+
+            # Update global guidance path
+            px = [p.x for p in self.global_path.points]
+            py = [p.y for p in self.global_path.points]
+            self.global_path_line.set_data(px, py)
+
+            sx = [s.x for s in self.global_path_segment.points]
+            sy = [s.y for s in self.global_path_segment.points]
+            self.global_path_segment_line.set_data(sx, sy)
+
+            # Update lidar
+            # for scan, (xl, yl) in zip(self.lidar_scans, zip(self.xls, self.yls)):
+            #     scan[0].set_data([self.xr, xl], [self.yr, yl])
+            # self.lidar_points.set_offsets(np.c_[self.xls, self.yls])
+
+            self.fig.canvas.draw_idle()
+            self.fig.canvas.flush_events()
+
+    def _get_robot_triangle(self):
+        return [
+            [
+                self.rr * np.cos(self.thr + np.deg2rad(140)) + self.xr,
+                self.rr * np.sin(self.thr + np.deg2rad(140)) + self.yr,
+            ],
+            [
+                self.rr * np.cos(self.thr) + self.xr,
+                self.rr * np.sin(self.thr) + self.yr,
+            ],
+            [
+                self.rr * np.cos(self.thr - np.deg2rad(140)) + self.xr,
+                self.rr * np.sin(self.thr - np.deg2rad(140)) + self.yr,
+            ],
+        ]
 
     def close(self):
         plt.ioff()

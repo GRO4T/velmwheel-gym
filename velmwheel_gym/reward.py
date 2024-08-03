@@ -8,16 +8,18 @@ from velmwheel_gym.types import NavigationDifficulty, Point
 logger = logging.getLogger(__name__)
 
 
-COLLISION_PENALTY = -0.8
-DETOUR_PENALTY = -0.1
+COLLISION_PENALTY = -0.9
+DETOUR_PENALTY = 0.0
 SUCCESS_REWARD = 0.5
-PATH_FOLLOWING_REWARD = 0.4
-MISALIGNMENT_FACTOR = 0.1
+PATH_FOLLOWING_REWARD = 0.5
+DISTANCE_FACTOR = 0.1
+MISALIGNMENT_FACTOR = 0.0
 
 
 # pylint: disable=too-many-arguments
 def calculate_reward(
     is_final_goal: bool,
+    prev_robot_position: Point,
     robot_position: Point,
     alpha: float,
     goal: Point,
@@ -33,7 +35,7 @@ def calculate_reward(
     if is_robot_collide:
         reward += (
             (max_episode_steps - steps)
-            * (DETOUR_PENALTY - MISALIGNMENT_FACTOR)
+            * (-MISALIGNMENT_FACTOR - DISTANCE_FACTOR)
             / max_episode_steps
         )
         reward += COLLISION_PENALTY
@@ -63,8 +65,11 @@ def calculate_reward(
             num_passed_points / global_guidance_path.original_num_points
         )
     else:
+        d1 = prev_robot_position.dist(goal)
+        d2 = robot_position.dist(goal)
+        distance_component = DISTANCE_FACTOR * (d1 - d2) * 30
         reward += (
-            DETOUR_PENALTY + min(0.0, misalignment_component)
+            distance_component + min(0.0, misalignment_component)
         ) / max_episode_steps
 
     return False, reward, False

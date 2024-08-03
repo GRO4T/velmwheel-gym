@@ -10,10 +10,7 @@ def angle_between_robot_and_goal(robot_pos, goal_pos, theta) -> float:
     G = np.array([x_g - x_r, y_g - y_r])
     G = G / np.linalg.norm(G)
     dot_product = np.dot(R, G)
-
-    if dot_product >= 0.0:
-        return np.arccos(dot_product)
-    return -np.arccos(dot_product)
+    return np.arccos(dot_product)
 
 
 def interpolate_coordinates(x1, y1, x2, y2, t):
