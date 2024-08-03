@@ -61,7 +61,6 @@ def get_n_points_evenly_spaced_on_path(
     points: list[Point],
     n: int,
     default_point: list[float],
-    origin: Point,
 ) -> list[float]:
     if not points:
         return n * default_point
@@ -71,8 +70,8 @@ def get_n_points_evenly_spaced_on_path(
         idx = int((i / n) * len(points))
         evenly_spaced_points.extend(
             [
-                points[idx].x - origin.x,
-                points[idx].y - origin.y,
+                points[idx].x,
+                points[idx].y,
             ]
         )
     return evenly_spaced_points

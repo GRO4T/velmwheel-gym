@@ -9,7 +9,6 @@ from typing import NamedTuple
 import numpy as np
 from matplotlib import pyplot as plt
 
-from velmwheel_gym.base_env import interpolate_coordinates
 from velmwheel_gym.constants import LIDAR_DATA_SIZE
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
@@ -18,6 +17,7 @@ from velmwheel_gym.global_guidance_path import GlobalGuidancePath, next_segment
 from velmwheel_gym.two_dim_env.lidar_2d import Lidar2D
 from velmwheel_gym.two_dim_env.planner import AStarPlanner
 from velmwheel_gym.types import NavigationDifficulty, Point
+from velmwheel_gym.utils import interpolate_coordinates
 
 from .utils import *
 

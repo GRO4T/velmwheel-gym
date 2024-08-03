@@ -130,13 +130,6 @@ class VelmwheelRobot:
         return self._lidar_data
 
     @property
-    def normalized_lidar_data(self) -> Optional[list[float]]:
-        """Normalized LIDAR data. Measurements are scaled to the range [0, 1]."""
-        if not self._lidar_data:
-            return None
-        return [x / 20.0 for x in self._lidar_data]
-
-    @property
     def lidar_tstamp(self) -> float:
         """Timestamp of the last received LIDAR data."""
         return self._lidar_tstamp

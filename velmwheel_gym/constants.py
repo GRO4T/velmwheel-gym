@@ -12,6 +12,9 @@ GLOBAL_GUIDANCE_OBSERVATION_POINTS = 10
 # All coordinates are divided by this factor while being part of an observation
 COORDINATES_NORMALIZATION_FACTOR = 20.0
 
+# Maximum range of the LIDAR sensor
+LIDAR_MAX_RANGE = 20.0
+
 # Navigation difficulty levels
 NAVIGATION_DIFFICULTIES = [
     NavigationDifficulty(
