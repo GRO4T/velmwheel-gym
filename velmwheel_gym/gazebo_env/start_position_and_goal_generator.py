@@ -28,9 +28,10 @@ class StartPositionAndGoalGenerator:
         self._idx = None
         self._combinations = [(x, y) for x in POINTS for y in POINTS if x != y]
         self._stats = [0] * len(self._combinations)
+        self._statfile = f"state/stats_{os.getpid()}.pkl"
 
-        if os.path.exists("state/stats.pkl"):
-            with open("state/stats.pkl", "rb") as f:
+        if os.path.exists(self._statfile):
+            with open(self._statfile, "rb") as f:
                 self._stats = pickle.load(f)
             logger.debug("Loaded stats")
             for i, (x, y) in enumerate(self._combinations):
@@ -61,7 +62,7 @@ class StartPositionAndGoalGenerator:
 
     def register_goal_reached(self):
         self._stats[self._idx] += 1
-        with open("state/stats.pkl", "wb") as f:
+        with open(self._statfile, "wb") as f:
             pickle.dump(self._stats, f)
 
     def generate_next(self):

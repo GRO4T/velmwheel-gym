@@ -117,10 +117,6 @@ while True:
     #     [(x, y) for x, y in zip(env.env.robot.env.dynamic_obstacles_x, env.env.robot.env.dynamic_obstacles_y)]
     # )
 
-    if terminated and reward < 0:
-        print("Collision detected!")
-        break
-
     print("----------------------------------------------")
     print(f"{action=}")
     print(f"{reward=}")
@@ -131,27 +127,47 @@ while True:
     print(f"{env.env.starting_position=}")
     print(f"{env.env.goal=}")
     print(f"{env.env.robot_position=}")
+    print(f"{info=}")
     print(f"{obs=}")
     print("----------------------------------------------")
+
+    if info.get("status", None) == "segment_reached":
+        steps = 0
+        env.reset()
+
+    if terminated and reward < 0:
+        if info.get("status", None) == "max_steps_reached":
+            print("Max steps reached!")
+        else:
+            print("Collision detected!")
+        env.step([0.0, 0.0, 0.0])
+        if generate_next_goal:
+            steps = 0
+            obs, _ = env.reset()
+        else:
+            break
 
     if dist_to_goal < min_dist_to_goal:
         min_dist_to_goal = dist_to_goal
 
     if dist_to_goal < difficulty.goal_reached_threshold:
         print("Goal reached!")
+        env.step([0.0, 0.0, 0.0])
         if generate_next_goal:
+            steps = 0
             obs, _ = env.reset()
         else:
             break
 
     steps += 1
-    if steps > env.env.max_episode_steps:
-        print("Max steps reached!")
-        if not env.env.is_final_goal or (env.env.is_final_goal and generate_next_goal):
-            steps = 0
-            env.reset()
-        else:
-            break
+    # if steps > env.env.max_episode_steps:
+    #     print("Max steps reached!")
+    #     env.step([0.0, 0.0, 0.0])
+    #     if not env.env.is_final_goal or (env.env.is_final_goal and generate_next_goal):
+    #         steps = 0
+    #         obs, _ = env.reset()
+    #     else:
+    #         break
 
     if render == "true":
         env.render()
@@ -165,6 +181,7 @@ while True:
 
     if total > time_limit:
         print("Time limit reached!")
+        env.step([0.0, 0.0, 0.0])
         break
 
 with open("footprint.pkl", "wb") as f:

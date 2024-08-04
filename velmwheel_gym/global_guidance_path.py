@@ -82,6 +82,7 @@ def next_segment(
     current_segment: list[Point],
     robot_position: Point,
     difficulty: NavigationDifficulty,
+    segment_length: float = 5.0,
 ) -> tuple[list[Point], GlobalGuidancePath]:
     if not points:
         return [], GlobalGuidancePath(robot_position, [], difficulty)
@@ -93,7 +94,7 @@ def next_segment(
     for idx, point in enumerate(points):
         delta += point.dist(prev)
         prev = point
-        if delta >= 1.0:
+        if delta >= segment_length:
             new_segment_points = copy.deepcopy(points[: idx + 1])
             split_idx = idx + 1
             break

@@ -15,3 +15,4 @@ class NavigationDifficulty(NamedTuple):
     driving_in_path_tolerance: float
     dynamic_obstacle_count: int
     dynamic_obstacle_motion: bool
+    extend_segment: bool = False

@@ -81,6 +81,10 @@ parser.add_argument(
     "--render", type=bool, help="Render the environment", required=False
 )
 parser.add_argument("--run_id", type=str, help="Run ID", required=False, default="")
+parser.add_argument("--global_path_segment_length", type=float, required=False)
+parser.add_argument("--noise_decay_steps", type=int, required=False)
+parser.add_argument("--variant", type=str, required=False)
+parser.add_argument("--gamma", type=float, required=False)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -115,6 +119,13 @@ extra_params = dict(
     real_time_factor=real_time_factor,
     render_mode="human" if render == "true" else None,
     training_mode=True,
+    name=run_id,
+    global_path_segment_length=float(
+        param_reader.read("global_path_segment_length", "VelmwheelGym")
+    ),
+    render_freq=int(param_reader.read("render_freq", "VelmwheelGym")),
+    variant=param_reader.read("variant", "VelmwheelGym"),
+    env_name=gym_env,
 )
 if envs > 1:
     env = make_vec_env(gym_env, n_envs=4, **extra_params)
@@ -135,6 +146,16 @@ callbacks = []
 callbacks.append(
     CheckpointCallback(
         save_freq=int(param_reader.read("save_freq")),
+        save_path=model_save_path,
+        name_prefix=algorithm.lower(),
+        save_replay_buffer=False,
+        save_vecnormalize=False,
+    )
+)
+
+callbacks.append(
+    CheckpointCallback(
+        save_freq=int(param_reader.read("replay_buffer_save_freq")),
         save_path=model_save_path,
         name_prefix=algorithm.lower(),
         save_replay_buffer=True,

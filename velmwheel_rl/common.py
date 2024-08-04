@@ -121,7 +121,7 @@ def create_model(
                 mean=np.zeros(n_actions),
                 sigma=1.0 * np.ones(n_actions),
                 target_sigma=0.1 * np.ones(n_actions),
-                decay_steps=50000,
+                decay_steps=int(param_reader.read("noise_decay_steps", "TD3")),
             )
             policy_kwargs = dict(
                 # net_arch=dict(pi=[256], qf=[128]),
@@ -193,6 +193,7 @@ def _get_wb_run_params(model: BaseAlgorithm, param_reader: ParameterReader) -> d
 
     wb_run_params = {
         "env_id": param_reader.read("gym_env"),
+        "env_variant": param_reader.read("variant", "VelmwheelGym"),
         "algorithm": algorithm,
         "total_timesteps": int(param_reader.read("timesteps")),
         "policy_type": "MlpPolicy",
@@ -207,6 +208,9 @@ def _get_wb_run_params(model: BaseAlgorithm, param_reader: ParameterReader) -> d
             wb_run_params["batch_size"] = model.batch_size
             wb_run_params["actor_lr"] = param_reader.read("actor_lr", algorithm)
             wb_run_params["critic_lr"] = param_reader.read("critic_lr", algorithm)
+            wb_run_params["noise_decay_steps"] = param_reader.read(
+                "noise_decay_steps", algorithm
+            )
 
     return wb_run_params
 

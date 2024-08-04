@@ -4,7 +4,7 @@ import subprocess
 
 import rclpy
 from rclpy.node import Node
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty, Trigger
 
 
 # pylint: disable=too-few-public-methods
@@ -17,6 +17,9 @@ class SimulationController(Node):
         self._nav_stack_log = None
         self._nav_stack = None
 
+        self._is_sim_running_srv = self.create_service(
+            Trigger, "/is_sim_running", self._is_sim_running
+        )
         self._start_sim_srv = self.create_service(Empty, "/start_sim", self._start_sim)
         self._stop_sim_srv = self.create_service(Empty, "/stop_sim", self._stop_sim)
         self._restart_sim_srv = self.create_service(
@@ -29,6 +32,20 @@ class SimulationController(Node):
         if self._nav_stack_log is not None:
             self._nav_stack_log.close()
         super().destroy_node()
+
+    def _is_sim_running(self, request, response):  # pylint: disable=unused-argument
+        # Sim is running if there is a process named "velmwheel_bringup"
+        try:
+            subprocess.check_output(
+                "ps -ef | grep velmwheel_bringup | grep -v grep", shell=True
+            )
+            is_sim_running = True
+        except subprocess.CalledProcessError as _:
+            is_sim_running = False
+
+        self.get_logger().info(f"Is simulation running: {is_sim_running}")
+        response.success = is_sim_running
+        return response
 
     def _start_sim(self, request, response):  # pylint: disable=unused-argument
         self.get_logger().info("Starting simulation")
@@ -70,6 +87,7 @@ class SimulationController(Node):
     def _stop_sim_processes(self) -> bool:
         try:
             subprocess.run("./kill_sim.sh", shell=True, check=True)
+            self._sim = None
             return True
         except subprocess.CalledProcessError as e:
             self.get_logger().error(f"Failed to kill simulation processes: {e}")

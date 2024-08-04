@@ -34,12 +34,16 @@ class Robot2D:
         lidar_max_range=20.0,
         dT=0.01,
         is_render=True,
+        name="Robot2D",
+        global_path_segment_length=5.0,
     ):
         self._difficulty = difficulty
+        self._name = name
         # Environment
         self.env = Environment(env_min_size, env_max_size)
         self.env_min_size = env_min_size
         self.env_max_size = env_max_size
+        self._global_path_segment_length = global_path_segment_length
 
         # Initial State
         self.xr = 0
@@ -62,7 +66,7 @@ class Robot2D:
 
         # Parameters for simulation
         self._time = 0.0
-        self._delta = 0.015
+        self._delta = 0.001
         self.dT = dT
         self.is_render = is_render
         self.fig = None
@@ -162,7 +166,11 @@ class Robot2D:
             with open("state/nav2_cache.pkl", "wb") as f:
                 pickle.dump(self._global_path_cache, f)
         self.global_path.points, self.global_path_segment = next_segment(
-            self.global_path.points, [], Point(self.xr, self.yr), self._difficulty
+            self.global_path.points,
+            [],
+            Point(self.xr, self.yr),
+            self._difficulty,
+            self._global_path_segment_length,
         )
 
     def step(self, vx, vy, w=0):
@@ -209,6 +217,7 @@ class Robot2D:
         if self.is_render and self.first_render:
             plt.ion()
             self.fig, self.ax = plt.subplots(figsize=(10, 10))
+            self.fig.canvas.manager.set_window_title(self._name)
             self.ax.set_xlim((-9, 9))
             self.ax.set_ylim((-9, 9))
 
@@ -262,7 +271,9 @@ class Robot2D:
             # Draw lidar
             # self.lidar_scans = []
             # for xl, yl in zip(self.xls, self.yls):
-            #     self.lidar_scans.append(self.ax.plot([self.xr, xl], [self.yr, yl], color="gray"))
+            #     self.lidar_scans.append(
+            #         self.ax.plot([self.xr, xl], [self.yr, yl], color="gray")
+            #     )
             # self.lidar_points = self.ax.scatter(self.xls, self.yls, color="r")
 
             plt.pause(0.5)
@@ -398,16 +409,21 @@ class Environment:
         gcs = []
         rcs = n * [r]
 
-        for _ in range(n):
-            px, py = self._random_point_without_robot_and_goal(
-                xr, yr, rr, xg, yg, rg, r
-            )
-            xcs.append(px)
-            ycs.append(py)
-            px, py = self._random_point_without_robot_and_goal(
-                xr, yr, rr, xg, yg, rg, r
-            )
-            gcs.append((px, py))
+        # for _ in range(n):
+        #     px, py = self._random_point_without_robot_and_goal(
+        #         xr, yr, rr, xg, yg, rg, r
+        #     )
+        #     xcs.append(px)
+        #     ycs.append(py)
+        #     px, py = self._random_point_without_robot_and_goal(
+        #         xr, yr, rr, xg, yg, rg, r
+        #     )
+        #     gcs.append((px, py))
+        from velmwheel_gym.constants import OBSTACLES_EASY
+
+        if n == 5:
+            xcs = [p[0] for p in OBSTACLES_EASY]
+            ycs = [p[1] for p in OBSTACLES_EASY]
 
         self.dynamic_obstacles_orig_x = np.array(xcs)
         self.dynamic_obstacles_orig_y = np.array(ycs)
