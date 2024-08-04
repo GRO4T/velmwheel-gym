@@ -7,7 +7,6 @@ import pickle
 from typing import NamedTuple
 
 import numpy as np
-from matplotlib import pyplot as plt
 
 from velmwheel_gym.constants import LIDAR_DATA_SIZE
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
@@ -33,12 +32,9 @@ class Robot2D:
         robot_radius=0.5,
         lidar_max_range=20.0,
         dT=0.01,
-        is_render=True,
-        name="Robot2D",
         global_path_segment_length=5.0,
     ):
         self._difficulty = difficulty
-        self._name = name
         # Environment
         self.env = Environment(env_min_size, env_max_size)
         self.env_min_size = env_min_size
@@ -68,10 +64,6 @@ class Robot2D:
         self._time = 0.0
         self._delta = 0.001
         self.dT = dT
-        self.is_render = is_render
-        self.fig = None
-        self.ax = None
-        self.first_render = True
 
         self.global_path: GlobalGuidancePath = None
         self.global_path_segment: GlobalGuidancePath = None
@@ -212,122 +204,6 @@ class Robot2D:
 
     def scanning(self):
         return self._lidar.scan()
-
-    def render(self):
-        if self.is_render and self.first_render:
-            plt.ion()
-            self.fig, self.ax = plt.subplots(figsize=(10, 10))
-            self.fig.canvas.manager.set_window_title(self._name)
-            self.ax.set_xlim((-9, 9))
-            self.ax.set_ylim((-9, 9))
-
-            # Draw static walls
-            self.static_walls = []
-            for wall in self.env.static_walls:
-                wall_patch = plt.Rectangle(
-                    (wall.x, wall.y),
-                    wall.width,
-                    wall.height,
-                    color="b",
-                    fill=True,
-                )
-                self.ax.add_patch(wall_patch)
-                self.static_walls.append(wall_patch)
-
-            # Draw global guidance path
-            px = [p.x for p in self.global_path.points]
-            py = [p.y for p in self.global_path.points]
-            (self.global_path_line,) = self.ax.plot(px, py, ".g")
-
-            sx = [s.x for s in self.global_path_segment.points]
-            sy = [s.y for s in self.global_path_segment.points]
-            (self.global_path_segment_line,) = self.ax.plot(sx, sy, ".y")
-
-            # Draw goal
-            self.robot_goal = plt.Circle(
-                (self.xg, self.yg), self.rg, color="g", fill=True, zorder=10
-            )
-            self.ax.add_patch(self.robot_goal)
-
-            # Draw robot
-            self.robot_circle = plt.Circle(
-                (self.xr, self.yr), self.rr, color="r", fill=True, zorder=10
-            )
-            self.ax.add_patch(self.robot_circle)
-            self.robot_triangle = plt.Polygon(self._get_robot_triangle(), zorder=20)
-            self.ax.add_patch(self.robot_triangle)
-
-            # Draw dynamic obstacles
-            self.dynamic_obstacles = []
-            for x, y, r in zip(
-                self.env.dynamic_obstacles_x,
-                self.env.dynamic_obstacles_y,
-                self.env.dynamic_obstacles_radius,
-            ):
-                obstacle = plt.Circle((x, y), r, color="b", fill=True)
-                self.ax.add_patch(obstacle)
-                self.dynamic_obstacles.append(obstacle)
-
-            # Draw lidar
-            # self.lidar_scans = []
-            # for xl, yl in zip(self.xls, self.yls):
-            #     self.lidar_scans.append(
-            #         self.ax.plot([self.xr, xl], [self.yr, yl], color="gray")
-            #     )
-            # self.lidar_points = self.ax.scatter(self.xls, self.yls, color="r")
-
-            plt.pause(0.5)
-            self.first_render = False
-
-        if self.is_render:
-            # Update robot position
-            self.robot_circle.center = (self.xr, self.yr)
-            self.robot_triangle.set_xy(self._get_robot_triangle())
-
-            # Update dynamic obstacles
-            for obstacle, (x, y) in zip(
-                self.dynamic_obstacles,
-                zip(self.env.dynamic_obstacles_x, self.env.dynamic_obstacles_y),
-            ):
-                obstacle.center = (x, y)
-
-            # Update global guidance path
-            px = [p.x for p in self.global_path.points]
-            py = [p.y for p in self.global_path.points]
-            self.global_path_line.set_data(px, py)
-
-            sx = [s.x for s in self.global_path_segment.points]
-            sy = [s.y for s in self.global_path_segment.points]
-            self.global_path_segment_line.set_data(sx, sy)
-
-            # Update lidar
-            # for scan, (xl, yl) in zip(self.lidar_scans, zip(self.xls, self.yls)):
-            #     scan[0].set_data([self.xr, xl], [self.yr, yl])
-            # self.lidar_points.set_offsets(np.c_[self.xls, self.yls])
-
-            self.fig.canvas.draw_idle()
-            self.fig.canvas.flush_events()
-
-    def _get_robot_triangle(self):
-        return [
-            [
-                self.rr * np.cos(self.thr + np.deg2rad(140)) + self.xr,
-                self.rr * np.sin(self.thr + np.deg2rad(140)) + self.yr,
-            ],
-            [
-                self.rr * np.cos(self.thr) + self.xr,
-                self.rr * np.sin(self.thr) + self.yr,
-            ],
-            [
-                self.rr * np.cos(self.thr - np.deg2rad(140)) + self.xr,
-                self.rr * np.sin(self.thr - np.deg2rad(140)) + self.yr,
-            ],
-        ]
-
-    def close(self):
-        plt.ioff()
-        plt.close()
-        self.first_render = True
 
 
 class Environment:

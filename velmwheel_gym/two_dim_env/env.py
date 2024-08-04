@@ -16,6 +16,7 @@ from velmwheel_gym.global_guidance_path import (
     next_segment,
 )
 from velmwheel_gym.reward import calculate_reward
+from velmwheel_gym.two_dim_env.renderer import Env2DRenderer
 from velmwheel_gym.types import NavigationDifficulty, Point
 from velmwheel_gym.utils import angle_between_robot_and_goal
 
@@ -30,14 +31,15 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
 
         self.robot = Robot2D(
             dT=BASE_STEP_TIME,
-            is_render=True,
             difficulty=self._difficulty,
-            name=f"{self._env_name}_{self._variant}",
             global_path_segment_length=self._global_path_segment_length,
         )
 
         self.xr0 = 0
         self.yr0 = 0
+        self._renderer = Env2DRenderer(
+            window_title=f"{self._env_name}_{self._variant}", display_lidar=False
+        )
 
     @property
     def max_episode_steps(self) -> int:
@@ -178,7 +180,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
                 and self._metrics.global_success_rate > 0.7
             ):
                 self._advance_to_next_level()
-                self.robot.first_render = True
+                self._renderer.reset()
 
         if (
             self._training_mode
@@ -235,7 +237,19 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         return self._observe(), {}
 
     def render(self, mode="human"):
-        self.robot.render()
+        self._renderer.render(
+            Point(*self.robot_position),
+            self.robot.thr,
+            self.goal,
+            self.robot.xls,
+            self.robot.yls,
+            self._global_path.points,
+            self._global_path_segment.points,
+            self.robot.env.static_walls,
+            self.robot.env.dynamic_obstacles_x,
+            self.robot.env.dynamic_obstacles_y,
+        )
 
     def close(self):
         self.robot.close()
+        self._renderer.close()

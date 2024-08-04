@@ -6,7 +6,7 @@ import numpy as np
 from velmwheel_gym.types import Point
 
 
-class DebugRenderer:
+class GazeboDebugRenderer:
     def __init__(self, window_title: str):
         self._is_first_render = True
         self._fig = None

@@ -16,7 +16,7 @@ from std_srvs.srv import Empty, Trigger
 
 from velmwheel_gym.base_env import VelmwheelBaseEnv
 from velmwheel_gym.constants import BASE_STEP_TIME
-from velmwheel_gym.gazebo_env.renderer import DebugRenderer
+from velmwheel_gym.gazebo_env.renderer import GazeboDebugRenderer
 from velmwheel_gym.gazebo_env.robot import VelmwheelRobot
 from velmwheel_gym.gazebo_env.ros_utils import call_service, create_ros_service_client
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
@@ -72,7 +72,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         self._simulation_init()
         self._robot = VelmwheelRobot()
         self.__start_position_and_goal_generator = StartPositionAndGoalGenerator()
-        self._renderer = DebugRenderer(window_title=self._name)
+        self._renderer = GazeboDebugRenderer(window_title=self._name)
 
         logger.debug("VelmwheelEnv created")
 
