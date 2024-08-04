@@ -2,6 +2,7 @@
 import configparser
 import signal
 import sys
+from pathlib import Path
 
 import gymnasium as gym
 from stable_baselines3.common.base_class import BaseAlgorithm
@@ -163,6 +164,14 @@ callbacks.append(
     )
 )
 
+
+# Save config and cmd
+Path(model_save_path).mkdir(parents=True, exist_ok=True)
+with open(f"{model_save_path}/cmdline.txt", "w+") as f:
+    f.write(" ".join(sys.argv))
+with open(f"{model_save_path}/config.ini", "w+") as f:
+    config.write(f)
+model_config["local_model_save_path"] = model_save_path
 
 # if "2D" in gym_env:
 #     eval_env = gym.make(gym_env, **extra_params)
