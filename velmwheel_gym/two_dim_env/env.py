@@ -240,7 +240,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         self._renderer.render(
             Point(*self.robot_position),
             self.robot.thr,
-            self.goal,
+            Point(self.robot.xg, self.robot.yg),
             self.robot.xls,
             self.robot.yls,
             self._global_path.points,

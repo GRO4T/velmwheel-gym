@@ -86,6 +86,10 @@ env = gym.make(
     real_time_factor=real_time_factor,
     render_mode="human" if render == "true" else None,
     training_mode=False,
+    global_path_segment_length=float(
+        param_reader.read("global_path_segment_length", "VelmwheelGym")
+    ),
+    variant=param_reader.read("variant", "VelmwheelGym"),
 )
 
 model, _ = load_model(

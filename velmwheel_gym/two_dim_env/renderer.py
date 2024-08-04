@@ -50,6 +50,7 @@ class Env2DRenderer:
             self._fast_render(
                 robot_position,
                 robot_orientation,
+                goal,
                 xls,
                 yls,
                 global_path,
@@ -102,7 +103,7 @@ class Env2DRenderer:
 
         # Draw goal
         self._robot_goal = plt.Circle(
-            (goal.x, goal.y), 0.25, color="g", fill=True, zorder=10
+            (goal.x, goal.y), 0.1, color="g", fill=True, zorder=10
         )
         self._ax.add_patch(self._robot_goal)
 
@@ -148,6 +149,7 @@ class Env2DRenderer:
         self,
         robot_position: Point,
         robot_orientation: float,
+        goal: Point,
         xls: np.array,
         yls: np.array,
         global_path: list[Point],
@@ -160,6 +162,9 @@ class Env2DRenderer:
         self._robot_triangle.set_xy(
             self._get_robot_triangle(robot_position, robot_orientation)
         )
+
+        # Update goal position
+        self._robot_goal.center = (goal.x, goal.y)
 
         # Update dynamic obstacles
         for obstacle, (x, y) in zip(
