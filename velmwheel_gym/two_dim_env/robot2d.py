@@ -285,21 +285,21 @@ class Environment:
         gcs = []
         rcs = n * [r]
 
-        # for _ in range(n):
-        #     px, py = self._random_point_without_robot_and_goal(
-        #         xr, yr, rr, xg, yg, rg, r
-        #     )
-        #     xcs.append(px)
-        #     ycs.append(py)
-        #     px, py = self._random_point_without_robot_and_goal(
-        #         xr, yr, rr, xg, yg, rg, r
-        #     )
-        #     gcs.append((px, py))
-        from velmwheel_gym.constants import OBSTACLES_EASY
+        for _ in range(n):
+            px, py = self._random_point_without_robot_and_goal(
+                xr, yr, rr, xg, yg, rg, r
+            )
+            xcs.append(px)
+            ycs.append(py)
+            px, py = self._random_point_without_robot_and_goal(
+                xr, yr, rr, xg, yg, rg, r
+            )
+            gcs.append((px, py))
+        # from velmwheel_gym.constants import OBSTACLES_EASY
 
-        if n == 5:
-            xcs = [p[0] for p in OBSTACLES_EASY]
-            ycs = [p[1] for p in OBSTACLES_EASY]
+        # if n == 15:
+        #     xcs = [p[0] for p in OBSTACLES_EASY]
+        #     ycs = [p[1] for p in OBSTACLES_EASY]
 
         self.dynamic_obstacles_orig_x = np.array(xcs)
         self.dynamic_obstacles_orig_y = np.array(ycs)

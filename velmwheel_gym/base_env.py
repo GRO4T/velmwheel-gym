@@ -44,7 +44,7 @@ class VelmwheelBaseEnv(gym.Env):
                     low=-1.0,
                     high=1.0,
                     shape=(
-                        7 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,
+                        5 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,
                     ),
                     dtype=np.float64,
                 )
@@ -53,11 +53,19 @@ class VelmwheelBaseEnv(gym.Env):
                     low=-1.0,
                     high=1.0,
                     shape=(
-                        6 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,
+                        4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,
                     ),
                     dtype=np.float64,
                 )
+            case "NoGlobalGuidance":
+                self.observation_space = gym.spaces.Box(
+                    low=-1.0,
+                    high=1.0,
+                    shape=(4 + LIDAR_DATA_SIZE,),
+                    dtype=np.float64,
+                )
 
+        self._total_steps = 0
         self._steps = 0
         self._metrics = Metrics()
         self._generate_next_goal = True
@@ -115,32 +123,32 @@ class VelmwheelBaseEnv(gym.Env):
 
     def _relative_to_robot(self, obs: np.array) -> np.array:
         robot_position = self.robot_position
-        obs[4] -= robot_position[0]
-        obs[5] -= robot_position[1]
-        global_path_start_idx = 7 if self._variant == "EasierFollowing" else 6
-        for i in range(
-            global_path_start_idx,
-            global_path_start_idx + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS,
-            2,
-        ):
-            obs[i] -= robot_position[0]
-            obs[i + 1] -= robot_position[1]
+        obs[2] -= robot_position[0]
+        obs[3] -= robot_position[1]
+        if self._variant != "NoGlobalGuidance":
+            global_path_start_idx = 5 if self._variant == "EasierFollowing" else 4
+            for i in range(
+                global_path_start_idx,
+                global_path_start_idx + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS,
+                2,
+            ):
+                obs[i] -= robot_position[0]
+                obs[i + 1] -= robot_position[1]
         return obs
 
     def _normalize_observation(self, obs: np.array) -> np.array:
         obs[1] /= np.pi
-        obs[2] *= 2.0
-        obs[3] *= 2.0
-        obs[4] /= COORDINATES_NORMALIZATION_FACTOR
-        obs[5] /= COORDINATES_NORMALIZATION_FACTOR
-        global_path_start_idx = 7 if self._variant == "EasierFollowing" else 6
-        for i in range(
-            global_path_start_idx,
-            global_path_start_idx + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS,
-            2,
-        ):
-            obs[i] /= COORDINATES_NORMALIZATION_FACTOR
-            obs[i + 1] /= COORDINATES_NORMALIZATION_FACTOR
+        obs[2] /= COORDINATES_NORMALIZATION_FACTOR
+        obs[3] /= COORDINATES_NORMALIZATION_FACTOR
+        if self._variant != "NoGlobalGuidance":
+            global_path_start_idx = 5 if self._variant == "EasierFollowing" else 4
+            for i in range(
+                global_path_start_idx,
+                global_path_start_idx + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS,
+                2,
+            ):
+                obs[i] /= COORDINATES_NORMALIZATION_FACTOR
+                obs[i + 1] /= COORDINATES_NORMALIZATION_FACTOR
         obs[-LIDAR_DATA_SIZE:] = [
             2 * min(scan, LIDAR_MAX_RANGE) / LIDAR_MAX_RANGE - 1
             for scan in obs[-LIDAR_DATA_SIZE:]

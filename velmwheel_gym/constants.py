@@ -15,39 +15,42 @@ COORDINATES_NORMALIZATION_FACTOR = 20.0
 # Maximum range of the LIDAR sensor
 LIDAR_MAX_RANGE = 20.0
 
+# Maximum linear velocity of the robot
+MAX_LINEAR_VELOCITY = 0.5
+
 # Navigation difficulty levels
 NAVIGATION_DIFFICULTIES = [
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=0.25,
+        driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=0,
         dynamic_obstacle_motion=False,
         extend_segment=False,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=0.25,
+        driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=5,
         dynamic_obstacle_motion=False,
         extend_segment=True,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=0.25,
+        driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=10,
         dynamic_obstacle_motion=False,
         extend_segment=True,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=0.25,
+        driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=20,
         dynamic_obstacle_motion=False,
         extend_segment=True,
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
-        driving_in_path_tolerance=0.25,
+        driving_in_path_tolerance=1.0,
         dynamic_obstacle_count=20,
         dynamic_obstacle_motion=True,
         extend_segment=True,
@@ -55,10 +58,19 @@ NAVIGATION_DIFFICULTIES = [
 ]
 
 OBSTACLES_EASY = [
-    (1.5, 1.5),
-    (1.5, -1.5),
-    (-1.5, 1.5),
-    (-1.5, -1.5),
+    (1.0, 1.0),
+    (1.0, -1.0),
+    (-1.0, 1.0),
+    (-1.0, -1.0),
+    (0.0, 3.0),
+    (0.0, -3.0),
+    (3.0, 0.0),
+    (-3.0, 0.0),
+    (-7.0, -3.0),
+    (-7.0, 3.0),
+    (-3.0, 7.0),
+    (3.0, 7.0),
+    (-3.0, -7.0),
 ]
 
 STATS_BUFFER_SIZE = 50

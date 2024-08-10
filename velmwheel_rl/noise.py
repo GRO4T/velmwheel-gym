@@ -59,7 +59,6 @@ class OrnsteinUhlenbeckActionNoiseWithDecay(ActionNoise):
         self._calls += 1
         t = min(1.0, self._calls / self._decay_steps)
         self._sigma = self._initial_sigma * (1 - t) + self._target_sigma * t
-        logger.trace(f"{self._sigma=}")
 
         self.noise_prev = noise
         return noise.astype(self._dtype)

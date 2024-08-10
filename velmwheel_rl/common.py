@@ -140,7 +140,6 @@ def create_model(
                 optimize_memory_usage=True,
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
                 policy_kwargs=policy_kwargs,
-                train_freq=(1, "step"),
             )
 
             # model.actor.optimizer.param_groups[0]["weight_decay"] = 0.00001

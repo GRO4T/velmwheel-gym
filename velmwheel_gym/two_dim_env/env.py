@@ -6,7 +6,7 @@ import math
 import numpy as np
 
 from velmwheel_gym.base_env import VelmwheelBaseEnv
-from velmwheel_gym.constants import BASE_STEP_TIME
+from velmwheel_gym.constants import BASE_STEP_TIME, MAX_LINEAR_VELOCITY
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
 )
@@ -102,8 +102,6 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         obs = [
             step_normalized,
             self.robot.thr,
-            self._vx,
-            self._vy,
             self.goal.x,
             self.goal.y,
         ]
@@ -111,13 +109,14 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         if self._variant == "EasierFollowing":
             obs.append(1.0 if self.is_final_goal else -1.0)
 
-        obs.extend(
-            get_n_points_evenly_spaced_on_path(
-                self._global_path_segment.points,
-                10,
-                [self.goal.x, self.goal.y],
+        if self._variant != "NoGlobalGuidance":
+            obs.extend(
+                get_n_points_evenly_spaced_on_path(
+                    self._global_path_segment.points,
+                    10,
+                    [self.goal.x, self.goal.y],
+                )
             )
-        )
 
         self.robot.scanning()
         # convert LIDAR touches to ranges
@@ -129,10 +128,11 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         return self._normalize_observation(self._relative_to_robot(np.array(obs)))
 
     def step(self, action):
+        self._total_steps += 1
         self._steps += 1
 
-        self._vx = 0.5 * action[0]
-        self._vy = 0.5 * action[1]
+        self._vx = MAX_LINEAR_VELOCITY * action[0]
+        self._vy = MAX_LINEAR_VELOCITY * action[1]
         w = action[2]
         self.prev_robot_position = Point(*self.robot_position)
         self.robot.step(self._vx, self._vy, w)
@@ -141,13 +141,9 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             Point(*self.robot_position)
         )
 
-        # TODO: verify this in Gazebo sim
-        driving_vector = np.array([self._vx, self._vy])
-        driving_vector /= np.linalg.norm(driving_vector)
-        robot_heading_vector = np.array(
-            [np.cos(self.robot.thr), np.sin(self.robot.thr)]
+        alpha = angle_between_robot_and_goal(
+            self.robot_position, self.goal, self.robot.thr
         )
-        alpha = np.arccos(np.dot(robot_heading_vector, driving_vector))
 
         self.robot.scanning()
         # convert LIDAR touches to ranges
@@ -157,6 +153,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         min_obstacle_dist = min(ranges)
 
         success, reward, terminated = calculate_reward(
+            self._variant,
             self.is_final_goal,
             self.prev_robot_position,
             Point(*self.robot_position),
@@ -169,6 +166,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             self.max_episode_steps,
             self._steps,
             min_obstacle_dist,
+            w,
         )
 
         self._metrics.episode_reward += reward

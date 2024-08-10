@@ -544,6 +544,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             if total > timeout_sec:
                 logger.warning("Timeout reached while waiting for a new path.")
                 return False
+        logger.info(f"Path generation took {total} seconds")
         return True
 
     def _global_planner_callback(self, message: Path):
