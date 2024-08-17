@@ -68,9 +68,10 @@ class Robot2D:
         self.global_path: GlobalGuidancePath = None
         self.global_path_segment: GlobalGuidancePath = None
         if os.path.exists("state/nav2_cache.pkl"):
-            with open("state/nav2_cache.pkl", "rb") as f:
-                self._global_path_cache = pickle.load(f)
-            logger.debug("Loaded global path cache")
+            # with open("state/nav2_cache.pkl", "rb") as f:
+            #     self._global_path_cache = pickle.load(f)
+            # logger.debug("Loaded global path cache")
+            self._global_path_cache: dict[tuple[Point, Point], GlobalGuidancePath] = {}
         else:
             self._global_path_cache: dict[tuple[Point, Point], GlobalGuidancePath] = {}
 
@@ -81,14 +82,19 @@ class Robot2D:
             ]
             self._start_position_and_goal_generator._goal = options["goal"]
         else:
-            self._start_position_and_goal_generator.generate_next()
+            is_safe = False
+            while not is_safe:
+                self._start_position_and_goal_generator.generate_next()
+                self.xr = self._start_position_and_goal_generator.starting_position.x
+                self.yr = self._start_position_and_goal_generator.starting_position.y
+                self.thr = self._start_position_and_goal_generator.starting_rotation
+                self.scanning()
+                is_safe = not self.is_crashed()
+
         self.xg = self._start_position_and_goal_generator.goal.x
         self.yg = self._start_position_and_goal_generator.goal.y
         if getattr(self, "robot_goal", None):
             self.robot_goal.center = (self.xg, self.yg)
-        self.xr = self._start_position_and_goal_generator.starting_position.x
-        self.yr = self._start_position_and_goal_generator.starting_position.y
-        self.thr = 0.0
         self.thg = np.random.uniform(low=-np.pi, high=np.pi)
 
         self.xls = []
@@ -123,10 +129,11 @@ class Robot2D:
                     o_dynamic_grid_x.append(ox)
                     o_dynamic_grid_y.append(oy - 0.2)
 
-                a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.98)
-                px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
-                if len(px) > 1:
-                    is_path_to_goal = True
+                is_path_to_goal = True
+                # a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.98)
+                # px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
+                # if len(px) > 1:
+                #     is_path_to_goal = True
 
         if (
             Point(self.xr, self.yr),
@@ -155,8 +162,8 @@ class Robot2D:
             self._global_path_cache[
                 (Point(self.xr, self.yr), Point(self.xg, self.yg))
             ] = copy.deepcopy(self.global_path)
-            with open("state/nav2_cache.pkl", "wb") as f:
-                pickle.dump(self._global_path_cache, f)
+            # with open("state/nav2_cache.pkl", "wb") as f:
+            #     pickle.dump(self._global_path_cache, f)
         self.global_path.points, self.global_path_segment = next_segment(
             self.global_path.points,
             [],
@@ -285,21 +292,21 @@ class Environment:
         gcs = []
         rcs = n * [r]
 
-        for _ in range(n):
-            px, py = self._random_point_without_robot_and_goal(
-                xr, yr, rr, xg, yg, rg, r
-            )
-            xcs.append(px)
-            ycs.append(py)
-            px, py = self._random_point_without_robot_and_goal(
-                xr, yr, rr, xg, yg, rg, r
-            )
-            gcs.append((px, py))
-        # from velmwheel_gym.constants import OBSTACLES_EASY
+        # for _ in range(n):
+        #     px, py = self._random_point_without_robot_and_goal(
+        #         xr, yr, rr, xg, yg, rg, r
+        #     )
+        #     xcs.append(px)
+        #     ycs.append(py)
+        #     px, py = self._random_point_without_robot_and_goal(
+        #         xr, yr, rr, xg, yg, rg, r
+        #     )
+        #     gcs.append((px, py))
+        from velmwheel_gym.constants import OBSTACLES_EASY
 
-        # if n == 15:
-        #     xcs = [p[0] for p in OBSTACLES_EASY]
-        #     ycs = [p[1] for p in OBSTACLES_EASY]
+        if n > 0:
+            xcs = [p[0] for p in OBSTACLES_EASY]
+            ycs = [p[1] for p in OBSTACLES_EASY]
 
         self.dynamic_obstacles_orig_x = np.array(xcs)
         self.dynamic_obstacles_orig_y = np.array(ycs)

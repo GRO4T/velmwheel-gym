@@ -1,5 +1,6 @@
 # pylint: disable=redefined-outer-name, c-extension-no-member
 import configparser
+import shutil
 import signal
 import sys
 from pathlib import Path
@@ -172,6 +173,13 @@ with open(f"{model_save_path}/cmdline.txt", "w+") as f:
 with open(f"{model_save_path}/config.ini", "w+") as f:
     config.write(f)
 model_config["local_model_save_path"] = model_save_path
+
+# Compress velmwheel_rl and velmwheel_gym and save them in the model_save_path
+Path(model_save_path).mkdir(parents=True, exist_ok=True)
+shutil.make_archive(f"{model_save_path}/velmwheel_rl", "zip", "velmwheel_rl")
+shutil.make_archive(f"{model_save_path}/velmwheel_gym", "zip", "velmwheel_gym")
+shutil.copy("trainer.py", model_save_path)
+shutil.copy("tester.py", model_save_path)
 
 # if "2D" in gym_env:
 #     eval_env = gym.make(gym_env, **extra_params)

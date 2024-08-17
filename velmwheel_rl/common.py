@@ -124,7 +124,7 @@ def create_model(
                 decay_steps=int(param_reader.read("noise_decay_steps", "TD3")),
             )
             policy_kwargs = dict(
-                # net_arch=dict(pi=[256], qf=[128]),
+                # net_arch=dict(pi=[800, 600], qf=[800, 600]),
             )
             model = TD3(
                 "MlpPolicy",
@@ -152,23 +152,21 @@ def create_model(
                 param_reader.read("critic_lr", "TD3")
             )
         case "PPO":
-            policy_kwargs = dict(
-                # net_arch=dict(pi=[256], vf=[128])
-            )
+            # policy_kwargs = dict(net_arch=dict(pi=[256, 256], vf=[256, 128]))
             model = PPO(
                 "MlpPolicy",
                 env,
                 verbose=1,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                policy_kwargs=policy_kwargs,
+                # policy_kwargs=policy_kwargs,
                 gamma=float(param_reader.read("gamma", "PPO")),
                 n_steps=int(param_reader.read("n_steps", "PPO")),
                 learning_rate=float(param_reader.read("learning_rate", "PPO")),
                 batch_size=int(param_reader.read("batch_size", "PPO")),
             )
 
-            model.policy.optimizer.param_groups[0]["weight_decay"] = 0.00001
+            # model.policy.optimizer.param_groups[0]["weight_decay"] = 0.00001
 
         case "SAC":
             model = SAC(

@@ -99,11 +99,17 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
 
     def _observe(self):
         step_normalized = 2 * self._steps / self.max_episode_steps - 1
+
+        # Round to 2 decimal places
+        theta = round(self.robot.thr, 2)
+        goal_x = round(self.goal.x, 2)
+        goal_y = round(self.goal.y, 2)
+
         obs = [
             step_normalized,
-            self.robot.thr,
-            self.goal.x,
-            self.goal.y,
+            theta,
+            goal_x,
+            goal_y,
         ]
 
         if self._variant == "EasierFollowing":
@@ -114,7 +120,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
                 get_n_points_evenly_spaced_on_path(
                     self._global_path_segment.points,
                     10,
-                    [self.goal.x, self.goal.y],
+                    [goal_x, goal_y],
                 )
             )
 
@@ -122,7 +128,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         # convert LIDAR touches to ranges
         ranges = []
         for xl, yl in zip(self.robot.xls, self.robot.yls):
-            ranges.append(math.dist(self.robot_position, (xl, yl)))
+            ranges.append(round(math.dist(self.robot_position, (xl, yl)), 2))
         obs.extend(ranges)
 
         return self._normalize_observation(self._relative_to_robot(np.array(obs)))
@@ -131,9 +137,12 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         self._total_steps += 1
         self._steps += 1
 
-        self._vx = MAX_LINEAR_VELOCITY * action[0]
-        self._vy = MAX_LINEAR_VELOCITY * action[1]
-        w = action[2]
+        t = min(1.0, self._total_steps / 5e3)
+        target_vel = 0.5 * (1.0 - t) + MAX_LINEAR_VELOCITY * t
+        target_rot = 1.0 * (1.0 - t) + 1.0 * t
+        self._vx = target_vel * action[0]
+        self._vy = target_vel * action[1]
+        w = target_rot * action[2]
         self.prev_robot_position = Point(*self.robot_position)
         self.robot.step(self._vx, self._vy, w)
 

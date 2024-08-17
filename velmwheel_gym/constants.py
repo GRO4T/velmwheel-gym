@@ -27,34 +27,34 @@ NAVIGATION_DIFFICULTIES = [
         dynamic_obstacle_motion=False,
         extend_segment=False,
     ),
-    NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
-        dynamic_obstacle_count=5,
-        dynamic_obstacle_motion=False,
-        extend_segment=True,
-    ),
-    NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
-        dynamic_obstacle_count=10,
-        dynamic_obstacle_motion=False,
-        extend_segment=True,
-    ),
-    NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
-        dynamic_obstacle_count=20,
-        dynamic_obstacle_motion=False,
-        extend_segment=True,
-    ),
-    NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
-        dynamic_obstacle_count=20,
-        dynamic_obstacle_motion=True,
-        extend_segment=True,
-    ),
+    # NavigationDifficulty(
+    #     goal_reached_threshold=0.25,
+    #     driving_in_path_tolerance=1.0,
+    #     dynamic_obstacle_count=20,
+    #     dynamic_obstacle_motion=False,
+    #     extend_segment=True,
+    # ),
+    # NavigationDifficulty(
+    #     goal_reached_threshold=0.25,
+    #     driving_in_path_tolerance=1.0,
+    #     dynamic_obstacle_count=10,
+    #     dynamic_obstacle_motion=False,
+    #     extend_segment=True,
+    # ),
+    # NavigationDifficulty(
+    #     goal_reached_threshold=0.25,
+    #     driving_in_path_tolerance=1.0,
+    #     dynamic_obstacle_count=20,
+    #     dynamic_obstacle_motion=False,
+    #     extend_segment=True,
+    # ),
+    # NavigationDifficulty(
+    #     goal_reached_threshold=0.25,
+    #     driving_in_path_tolerance=1.0,
+    #     dynamic_obstacle_count=20,
+    #     dynamic_obstacle_motion=True,
+    #     extend_segment=True,
+    # ),
 ]
 
 OBSTACLES_EASY = [

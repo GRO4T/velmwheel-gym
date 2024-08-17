@@ -179,8 +179,8 @@ while True:
     end = time.time()
     elapsed = end - start
     start = end
-    if elapsed < 0.050:
-        time.sleep(0.050 - elapsed)
+    # if elapsed < 0.050:
+    #     time.sleep(0.050 - elapsed)
     print(f"fps: {1 / elapsed}")
 
     if total > time_limit:

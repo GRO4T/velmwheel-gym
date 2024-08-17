@@ -57,9 +57,10 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         self.__global_path: GlobalGuidancePath = None
         self.__global_path_segment: GlobalGuidancePath = None
         if os.path.exists("state/nav2_cache.pkl"):
-            with open("state/nav2_cache.pkl", "rb") as f:
-                self._global_path_cache = pickle.load(f)
-            logger.debug("Loaded global path cache")
+            # with open("state/nav2_cache.pkl", "rb") as f:
+            #     self._global_path_cache = pickle.load(f)
+            # logger.debug("Loaded global path cache")
+            self._global_path_cache: dict[tuple[Point, Point], GlobalGuidancePath] = {}
         else:
             self._global_path_cache: dict[tuple[Point, Point], GlobalGuidancePath] = {}
         self._is_obstacles_spawned = False
@@ -272,6 +273,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         min_obstacle_dist = min(self._robot.lidar_data)
 
         success, reward, terminated = calculate_reward(
+            self._variant,
             self.is_final_goal,
             self.prev_robot_position,
             self._robot.position,
@@ -284,6 +286,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             self.max_episode_steps,
             self._steps,
             min_obstacle_dist,
+            action[2],
         )
         self._metrics.episode_reward += reward
 
@@ -315,7 +318,13 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
 
         obs = self._observe()
 
-        return obs, reward, terminated, False, {}
+        info = {}
+        if success and not self.is_final_goal:
+            info["status"] = "segment_reached"
+        elif self._steps == self.max_episode_steps:
+            info["status"] = "max_steps_reached"
+
+        return obs, reward, terminated, False, info
 
     # pylint: disable=unused-argument
     def reset(self, seed=None, options=None):
@@ -483,8 +492,6 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         step_normalized = 2 * self._steps / self.max_episode_steps - 1
         obs = [
             step_normalized,
-            self._vx,
-            self._vy,
             self._robot.theta,
             self.sub_goal.x,
             self.sub_goal.y,
@@ -583,8 +590,8 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             self._global_path_cache[(self.starting_position, self.goal)] = deepcopy(
                 self._global_path
             )
-            with open("state/nav2_cache.pkl", "wb") as f:
-                pickle.dump(self._global_path_cache, f)
+            # with open("state/nav2_cache.pkl", "wb") as f:
+            #     pickle.dump(self._global_path_cache, f)
 
     def _analyze_path(self, points: list[Point]):
         logger.debug(f"New path has {len(points)} points")
