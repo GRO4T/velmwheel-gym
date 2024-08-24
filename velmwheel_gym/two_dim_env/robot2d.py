@@ -8,7 +8,6 @@ from typing import NamedTuple
 
 import numpy as np
 
-from velmwheel_gym.constants import LIDAR_DATA_SIZE
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
 )
@@ -36,7 +35,7 @@ class Robot2D:
     ):
         self._difficulty = difficulty
         # Environment
-        self.env = Environment(env_min_size, env_max_size)
+        self.env = Environment(env_min_size, env_max_size, self._difficulty)
         self.env_min_size = env_min_size
         self.env_max_size = env_max_size
         self._global_path_segment_length = global_path_segment_length
@@ -48,7 +47,9 @@ class Robot2D:
         self.rr = robot_radius
 
         # Goal parameters
-        self._start_position_and_goal_generator = StartPositionAndGoalGenerator()
+        self._start_position_and_goal_generator = StartPositionAndGoalGenerator(
+            self._difficulty
+        )
         self.xg = 0
         self.yg = 0
         self.thg = 0
@@ -56,7 +57,9 @@ class Robot2D:
 
         # Lidar parameters
         self.max_range = lidar_max_range
-        self._lidar = Lidar2D(self, 360, LIDAR_DATA_SIZE, lidar_max_range)
+        self._lidar = Lidar2D(
+            self, 360, self._difficulty.raw_lidar_ray_count, lidar_max_range
+        )
         self.xls = []
         self.yls = []
 
@@ -76,20 +79,36 @@ class Robot2D:
             self._global_path_cache: dict[tuple[Point, Point], GlobalGuidancePath] = {}
 
     def reset(self, options=None):
+        if self._difficulty.dynamic_obstacles:
+            self.env.get_random_obstacles(
+                self.xr,
+                self.yr,
+                self.rr,
+                self.xg,
+                self.yg,
+                self.rg,
+                len(self._difficulty.dynamic_obstacles),
+            )
+
         if options and "goal" in options and "starting_position" in options:
             self._start_position_and_goal_generator._starting_position = options[
                 "starting_position"
             ]
             self._start_position_and_goal_generator._goal = options["goal"]
         else:
-            is_safe = False
-            while not is_safe:
+            while True:
                 self._start_position_and_goal_generator.generate_next()
+                self.xr = self._start_position_and_goal_generator.goal.x
+                self.yr = self._start_position_and_goal_generator.goal.y
+                self.scanning()
+                if self.is_crashed(threshold=0.6):
+                    continue
                 self.xr = self._start_position_and_goal_generator.starting_position.x
                 self.yr = self._start_position_and_goal_generator.starting_position.y
                 self.thr = self._start_position_and_goal_generator.starting_rotation
                 self.scanning()
-                is_safe = not self.is_crashed()
+                if not self.is_crashed(threshold=0.6):
+                    break
 
         self.xg = self._start_position_and_goal_generator.goal.x
         self.yg = self._start_position_and_goal_generator.goal.y
@@ -99,41 +118,6 @@ class Robot2D:
 
         self.xls = []
         self.yls = []
-
-        if self._difficulty.dynamic_obstacle_count > 0:
-            is_path_to_goal = False
-            while not is_path_to_goal:
-                self.env.get_random_obstacles(
-                    self.xr,
-                    self.yr,
-                    self.rr,
-                    self.xg,
-                    self.yg,
-                    self.rg,
-                    self._difficulty.dynamic_obstacle_count,
-                )
-                o_dynamic_grid_x = copy.deepcopy(self.env.o_static_grid_x)
-                o_dynamic_grid_y = copy.deepcopy(self.env.o_static_grid_y)
-
-                for ox, oy in zip(
-                    self.env.dynamic_obstacles_x, self.env.dynamic_obstacles_y
-                ):
-                    o_dynamic_grid_x.append(ox)
-                    o_dynamic_grid_y.append(oy)
-                    o_dynamic_grid_x.append(ox + 0.2)
-                    o_dynamic_grid_y.append(oy)
-                    o_dynamic_grid_x.append(ox - 0.2)
-                    o_dynamic_grid_y.append(oy)
-                    o_dynamic_grid_x.append(ox)
-                    o_dynamic_grid_y.append(oy + 0.2)
-                    o_dynamic_grid_x.append(ox)
-                    o_dynamic_grid_y.append(oy - 0.2)
-
-                is_path_to_goal = True
-                # a_star = AStarPlanner(o_dynamic_grid_x, o_dynamic_grid_y, 0.2, 0.98)
-                # px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
-                # if len(px) > 1:
-                #     is_path_to_goal = True
 
         if (
             Point(self.xr, self.yr),
@@ -148,7 +132,7 @@ class Robot2D:
         else:
             logger.debug("Calculating new global path")
             a_star = AStarPlanner(
-                self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.98
+                self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.5
             )
             px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
 
@@ -192,25 +176,15 @@ class Robot2D:
                 self.env.dynamic_obstacles_x[i] = new_x
                 self.env.dynamic_obstacles_y[i] = new_y
 
-    def is_crashed(self):
-        if (self.xr > self.env_max_size - self.rr) or (
-            self.xr < self.env_min_size + self.rr
-        ):
-            return True
-
-        if (self.yr > self.env_max_size - self.rr) or (
-            self.yr < self.env_min_size + self.rr
-        ):
-            return True
-
+    def is_crashed(self, threshold=0.5):
         for xl, yl in zip(self.xls, self.yls):
-            if np.linalg.norm([xl - self.xr, yl - self.yr]) < 0.5:
+            if np.linalg.norm([xl - self.xr, yl - self.yr]) < threshold:
                 return True
 
         return False
 
     def scanning(self):
-        return self._lidar.scan()
+        self._lidar.scan()
 
 
 class Environment:
@@ -224,9 +198,11 @@ class Environment:
         self,
         env_min_size,
         env_max_size,
+        difficulty: NavigationDifficulty,
     ):
         self.env_min_size = env_min_size
         self.env_max_size = env_max_size
+        self._difficulty = difficulty
 
         self.static_walls: list[Environment.Wall] = [
             Environment.Wall(-6, -6, 8, 0.2),
@@ -292,21 +268,9 @@ class Environment:
         gcs = []
         rcs = n * [r]
 
-        # for _ in range(n):
-        #     px, py = self._random_point_without_robot_and_goal(
-        #         xr, yr, rr, xg, yg, rg, r
-        #     )
-        #     xcs.append(px)
-        #     ycs.append(py)
-        #     px, py = self._random_point_without_robot_and_goal(
-        #         xr, yr, rr, xg, yg, rg, r
-        #     )
-        #     gcs.append((px, py))
-        from velmwheel_gym.constants import OBSTACLES_EASY
-
         if n > 0:
-            xcs = [p[0] for p in OBSTACLES_EASY]
-            ycs = [p[1] for p in OBSTACLES_EASY]
+            xcs = [p[0] for p in self._difficulty.dynamic_obstacles]
+            ycs = [p[1] for p in self._difficulty.dynamic_obstacles]
 
         self.dynamic_obstacles_orig_x = np.array(xcs)
         self.dynamic_obstacles_orig_y = np.array(ycs)

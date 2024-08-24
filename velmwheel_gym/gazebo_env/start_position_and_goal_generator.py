@@ -5,7 +5,7 @@ import random
 
 import numpy as np
 
-from velmwheel_gym.types import Point
+from velmwheel_gym.types import NavigationDifficulty, Point
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ POINTS = [
 
 
 class StartPositionAndGoalGenerator:
-    def __init__(self):
+    def __init__(self, difficulty: NavigationDifficulty):
         self._starting_rotation = None
         self._starting_position = None
         self._goal = None
@@ -32,6 +32,7 @@ class StartPositionAndGoalGenerator:
         self._combinations = [(x, y) for x in POINTS for y in POINTS if x != y]
         self._stats = [0] * len(self._combinations)
         self._statfile = f"state/stats_{os.getpid()}.pkl"
+        self._difficulty = difficulty
 
         if os.path.exists(self._statfile):
             with open(self._statfile, "rb") as f:
@@ -74,17 +75,23 @@ class StartPositionAndGoalGenerator:
         #     pickle.dump(self._stats, f)
 
     def generate_next(self):
-        sx = random.SystemRandom().uniform(-2.0, 2.0)
-        sy = random.SystemRandom().uniform(-2.0, 2.0)
-        # sx = random.SystemRandom().uniform(-4.0, 4.0)
-        # sy = random.SystemRandom().uniform(-4.0, 4.0)
+        # sx = random.SystemRandom().uniform(0.0, 6.0)
+        # sy = random.SystemRandom().uniform(-4.0, -8.0)
+        # sx = random.SystemRandom().uniform(-2.0, 2.0)
+        # sy = random.SystemRandom().uniform(-2.0, 2.0)
+        sx = random.SystemRandom().uniform(*self._difficulty.starting_rect[0])
+        sy = random.SystemRandom().uniform(*self._difficulty.starting_rect[1])
         self._starting_position = Point(sx, sy)
         self._starting_rotation = random.SystemRandom().uniform(-np.pi, np.pi)
         # self._goal = random.SystemRandom().choice(POINTS)
+        # gx = random.SystemRandom().uniform(0.0, 6.0)
+        # gy = random.SystemRandom().uniform(-4.0, -8.0)
         # gx = random.SystemRandom().uniform(-2.0, 2.0)
         # gy = random.SystemRandom().uniform(-2.0, 2.0)
-        # self._goal = Point(gx, gy)
-        self._goal = Point(0.0, 0.0)
+        gx = random.SystemRandom().uniform(*self._difficulty.goal_rect[0])
+        gy = random.SystemRandom().uniform(*self._difficulty.goal_rect[1])
+        self._goal = Point(gx, gy)
+        # self._goal = Point(0.0, 0.0)
 
         # inverse_stats = [1 / (1 + x) for x in self._stats]
         # total = sum(inverse_stats)

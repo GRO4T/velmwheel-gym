@@ -1,10 +1,10 @@
-from velmwheel_gym.types import NavigationDifficulty
+from velmwheel_gym.types import NavigationDifficulty, Point
 
 # Step time in seconds at real time factor 1.0
 BASE_STEP_TIME = 0.050
 
 # Number of lidar rays
-LIDAR_DATA_SIZE = 90
+TARGET_LIDAR_RAY_COUNT = 45
 
 # Number of coordinates in global guidance observation
 GLOBAL_GUIDANCE_OBSERVATION_POINTS = 10
@@ -23,54 +23,80 @@ NAVIGATION_DIFFICULTIES = [
     NavigationDifficulty(
         goal_reached_threshold=0.25,
         driving_in_path_tolerance=1.0,
-        dynamic_obstacle_count=0,
+        dynamic_obstacles=[],
         dynamic_obstacle_motion=False,
         extend_segment=False,
+        starting_rect=(Point(-2.0, 2.0), Point(-2.0, 2.0)),
+        goal_rect=(Point(0.0, 0.0), Point(0.0, 0.0)),
+        raw_lidar_ray_count=45,
     ),
-    # NavigationDifficulty(
-    #     goal_reached_threshold=0.25,
-    #     driving_in_path_tolerance=1.0,
-    #     dynamic_obstacle_count=20,
-    #     dynamic_obstacle_motion=False,
-    #     extend_segment=True,
-    # ),
-    # NavigationDifficulty(
-    #     goal_reached_threshold=0.25,
-    #     driving_in_path_tolerance=1.0,
-    #     dynamic_obstacle_count=10,
-    #     dynamic_obstacle_motion=False,
-    #     extend_segment=True,
-    # ),
-    # NavigationDifficulty(
-    #     goal_reached_threshold=0.25,
-    #     driving_in_path_tolerance=1.0,
-    #     dynamic_obstacle_count=20,
-    #     dynamic_obstacle_motion=False,
-    #     extend_segment=True,
-    # ),
-    # NavigationDifficulty(
-    #     goal_reached_threshold=0.25,
-    #     driving_in_path_tolerance=1.0,
-    #     dynamic_obstacle_count=20,
-    #     dynamic_obstacle_motion=True,
-    #     extend_segment=True,
-    # ),
-]
-
-OBSTACLES_EASY = [
-    (1.0, 1.0),
-    (1.0, -1.0),
-    (-1.0, 1.0),
-    (-1.0, -1.0),
-    (0.0, 3.0),
-    (0.0, -3.0),
-    (3.0, 0.0),
-    (-3.0, 0.0),
-    (-7.0, -3.0),
-    (-7.0, 3.0),
-    (-3.0, 7.0),
-    (3.0, 7.0),
-    (-3.0, -7.0),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacles=[],
+        dynamic_obstacle_motion=False,
+        extend_segment=False,
+        starting_rect=(Point(-2.0, 2.0), Point(-2.0, 2.0)),
+        goal_rect=(Point(-2.0, -2.0), Point(2.0, 2.0)),
+        raw_lidar_ray_count=45,
+    ),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacles=[],
+        dynamic_obstacle_motion=False,
+        extend_segment=False,
+        starting_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
+        goal_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
+        raw_lidar_ray_count=45,
+    ),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacles=[
+            (0.0, 3.0),
+            (0.0, -3.0),
+            (3.0, 0.0),
+            (-3.0, 0.0),
+        ],
+        dynamic_obstacle_motion=False,
+        extend_segment=False,
+        starting_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
+        goal_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
+        raw_lidar_ray_count=45,
+    ),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacles=[
+            (0.0, 3.0),
+            (0.0, -3.0),
+            (3.0, 0.0),
+            (-3.0, 0.0),
+            (0.0, 0.0),
+        ],
+        dynamic_obstacle_motion=False,
+        extend_segment=False,
+        starting_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
+        goal_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
+        raw_lidar_ray_count=45,
+    ),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacles=[
+            (0.0, 3.0),
+            (0.0, -3.0),
+            (3.0, 0.0),
+            (-3.0, 0.0),
+            (0.0, 0.0),
+        ],
+        dynamic_obstacle_motion=False,
+        extend_segment=False,
+        starting_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
+        goal_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
+        raw_lidar_ray_count=180,
+    ),
 ]
 
 STATS_BUFFER_SIZE = 50

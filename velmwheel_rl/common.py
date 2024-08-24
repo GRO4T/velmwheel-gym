@@ -34,9 +34,14 @@ class ParameterReader:
 
 
 def get_model_save_path_and_tb_log_name(
-    algorithm: str, model_path: str
+    algorithm: str, model_path: str, override_run_id: int = None
 ) -> tuple[str, str]:
     if model_path:
+        if override_run_id:
+            return (
+                os.path.join(f"./models/{algorithm.lower()}", str(override_run_id)),
+                f"{algorithm}_{override_run_id}",
+            )
         return (
             os.path.dirname(model_path),
             f"{algorithm}_{os.path.basename(os.path.dirname(model_path))}",

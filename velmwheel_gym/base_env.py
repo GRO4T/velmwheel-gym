@@ -7,9 +7,9 @@ import numpy as np
 from velmwheel_gym.constants import (
     COORDINATES_NORMALIZATION_FACTOR,
     GLOBAL_GUIDANCE_OBSERVATION_POINTS,
-    LIDAR_DATA_SIZE,
     LIDAR_MAX_RANGE,
     NAVIGATION_DIFFICULTIES,
+    TARGET_LIDAR_RAY_COUNT,
 )
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
@@ -44,7 +44,9 @@ class VelmwheelBaseEnv(gym.Env):
                     low=-1.0,
                     high=1.0,
                     shape=(
-                        5 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,
+                        5
+                        + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS
+                        + TARGET_LIDAR_RAY_COUNT,
                     ),
                     dtype=np.float64,
                 )
@@ -53,7 +55,9 @@ class VelmwheelBaseEnv(gym.Env):
                     low=-1.0,
                     high=1.0,
                     shape=(
-                        4 + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS + LIDAR_DATA_SIZE,
+                        4
+                        + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS
+                        + TARGET_LIDAR_RAY_COUNT,
                     ),
                     dtype=np.float64,
                 )
@@ -61,7 +65,7 @@ class VelmwheelBaseEnv(gym.Env):
                 self.observation_space = gym.spaces.Box(
                     low=-1.0,
                     high=1.0,
-                    shape=(4 + LIDAR_DATA_SIZE,),
+                    shape=(4 + TARGET_LIDAR_RAY_COUNT,),
                     dtype=np.float64,
                 )
 
@@ -149,9 +153,9 @@ class VelmwheelBaseEnv(gym.Env):
             ):
                 obs[i] /= COORDINATES_NORMALIZATION_FACTOR
                 obs[i + 1] /= COORDINATES_NORMALIZATION_FACTOR
-        obs[-LIDAR_DATA_SIZE:] = [
+        obs[-TARGET_LIDAR_RAY_COUNT:] = [
             2 * min(scan, LIDAR_MAX_RANGE) / LIDAR_MAX_RANGE - 1
-            for scan in obs[-LIDAR_DATA_SIZE:]
+            for scan in obs[-TARGET_LIDAR_RAY_COUNT:]
         ]
         return obs
 

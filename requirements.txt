@@ -10,6 +10,7 @@ cloudpickle==2.2.1
 contourpy==1.1.1
 cycler==0.12.1
 Farama-Notifications==0.0.4
+FastLine==1.1
 filelock==3.12.4
 fonttools==4.43.1
 fsspec==2023.9.2
@@ -75,4 +76,5 @@ triton==2.1.0
 typing_extensions==4.8.0
 tzdata==2023.3
 urllib3==2.0.6
+wandb==0.17.7
 Werkzeug==3.0.0

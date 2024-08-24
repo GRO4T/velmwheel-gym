@@ -6,7 +6,11 @@ import math
 import numpy as np
 
 from velmwheel_gym.base_env import VelmwheelBaseEnv
-from velmwheel_gym.constants import BASE_STEP_TIME, MAX_LINEAR_VELOCITY
+from velmwheel_gym.constants import (
+    BASE_STEP_TIME,
+    MAX_LINEAR_VELOCITY,
+    TARGET_LIDAR_RAY_COUNT,
+)
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
     StartPositionAndGoalGenerator,
 )
@@ -96,20 +100,22 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         self.robot._difficulty = difficulty
         self._global_path._difficulty = difficulty
         self._global_path_segment._difficulty = difficulty
+        self._start_position_and_goal_generator._difficulty = difficulty
+        self.robot.env._difficulty = difficulty
+        from velmwheel_gym.two_dim_env.lidar_2d import Lidar2D
+
+        self.robot._lidar = Lidar2D(
+            self.robot, 360, self._difficulty.raw_lidar_ray_count, self.robot.max_range
+        )
 
     def _observe(self):
         step_normalized = 2 * self._steps / self.max_episode_steps - 1
 
-        # Round to 2 decimal places
-        theta = round(self.robot.thr, 2)
-        goal_x = round(self.goal.x, 2)
-        goal_y = round(self.goal.y, 2)
-
         obs = [
             step_normalized,
-            theta,
-            goal_x,
-            goal_y,
+            self.robot.thr,
+            self.goal.x,
+            self.goal.y,
         ]
 
         if self._variant == "EasierFollowing":
@@ -120,16 +126,11 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
                 get_n_points_evenly_spaced_on_path(
                     self._global_path_segment.points,
                     10,
-                    [goal_x, goal_y],
+                    [self.goal.x, self.goal.y],
                 )
             )
 
-        self.robot.scanning()
-        # convert LIDAR touches to ranges
-        ranges = []
-        for xl, yl in zip(self.robot.xls, self.robot.yls):
-            ranges.append(round(math.dist(self.robot_position, (xl, yl)), 2))
-        obs.extend(ranges)
+        obs.extend(self._lidar_ranges)
 
         return self._normalize_observation(self._relative_to_robot(np.array(obs)))
 
@@ -154,12 +155,8 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             self.robot_position, self.goal, self.robot.thr
         )
 
-        self.robot.scanning()
-        # convert LIDAR touches to ranges
-        ranges = []
-        for xl, yl in zip(self.robot.xls, self.robot.yls):
-            ranges.append(math.dist(self.robot_position, (xl, yl)))
-        min_obstacle_dist = min(ranges)
+        self._lidar_ranges = self._calculate_lidar_ranges()
+        min_obstacle_dist = min(self._lidar_ranges)
 
         success, reward, terminated = calculate_reward(
             self._variant,
@@ -241,6 +238,8 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             self.xr0 = self.robot.xr
             self.yr0 = self.robot.yr
 
+        self._lidar_ranges = self._calculate_lidar_ranges()
+
         return self._observe(), {}
 
     def render(self, mode="human"):
@@ -260,3 +259,14 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
     def close(self):
         self.robot.close()
         self._renderer.close()
+
+    def _calculate_lidar_ranges(self):
+        self.robot.scanning()
+        # convert LIDAR touches to ranges
+        ranges = []
+        for xl, yl in zip(self.robot.xls, self.robot.yls):
+            ranges.append(math.dist(self.robot_position, (xl, yl)))
+        factor = self._difficulty.raw_lidar_ray_count // TARGET_LIDAR_RAY_COUNT
+        if factor > 1:
+            return [min(ranges[i : i + factor]) for i in range(0, len(ranges), factor)]
+        return ranges

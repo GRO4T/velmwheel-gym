@@ -13,6 +13,9 @@ class Point(NamedTuple):
 class NavigationDifficulty(NamedTuple):
     goal_reached_threshold: float
     driving_in_path_tolerance: float
-    dynamic_obstacle_count: int
+    dynamic_obstacles: list[Point]
     dynamic_obstacle_motion: bool
-    extend_segment: bool = False
+    extend_segment: bool
+    starting_rect: tuple[Point, Point]
+    goal_rect: tuple[Point, Point]
+    raw_lidar_ray_count: int

@@ -72,7 +72,9 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
 
         self._simulation_init()
         self._robot = VelmwheelRobot()
-        self.__start_position_and_goal_generator = StartPositionAndGoalGenerator()
+        self.__start_position_and_goal_generator = StartPositionAndGoalGenerator(
+            self._difficulty
+        )
         self._renderer = GazeboDebugRenderer(window_title=self._name)
 
         logger.debug("VelmwheelEnv created")
@@ -405,26 +407,34 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
 
     def _spawn_random_obstacles(self, n: int = 5):
         logger.debug(f"Spawning {n} random obstacles")
+        from velmwheel_gym.constants import OBSTACLES_EASY
+
+        n = len(OBSTACLES_EASY)
+
         self._dynamic_obstacles_start_positions = [None] * n
         self._dynamic_obstacles_target_positions = [None] * n
         for i in range(n):
-            while True:
-                x = np.random.uniform(-9, 9)
-                y = np.random.uniform(-9, 9)
-                if (
-                    Point(x, y).dist(self.goal) > 2.0
-                    and Point(x, y).dist(self.starting_position) > 2.0
-                ):
-                    break
+            # while True:
+            #     x = np.random.uniform(-9, 9)
+            #     y = np.random.uniform(-9, 9)
+            #     if (
+            #         Point(x, y).dist(self.goal) > 2.0
+            #         and Point(x, y).dist(self.starting_position) > 2.0
+            #     ):
+            #         break
 
-            while True:
-                tx = np.random.uniform(-9, 9)
-                ty = np.random.uniform(-9, 9)
-                if (
-                    Point(tx, ty).dist(self.goal) > 2.0
-                    and Point(tx, ty).dist(self.starting_position) > 2.0
-                ):
-                    break
+            # while True:
+            #     tx = np.random.uniform(-9, 9)
+            #     ty = np.random.uniform(-9, 9)
+            #     if (
+            #         Point(tx, ty).dist(self.goal) > 2.0
+            #         and Point(tx, ty).dist(self.starting_position) > 2.0
+            #     ):
+            #         break
+            x = OBSTACLES_EASY[i][0]
+            y = OBSTACLES_EASY[i][1]
+            tx = x
+            ty = y
 
             self._dynamic_obstacles_start_positions[i] = Point(x, y)
             self._dynamic_obstacles_target_positions[i] = Point(tx, ty)

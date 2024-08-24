@@ -4,7 +4,7 @@
 *.stats
 *.swp
 config.ini[0-9A-Za-z_.]*
-venv/
+*venv*/
 .vscode/
 .idea/
 __pycache__/

@@ -87,6 +87,9 @@ parser.add_argument("--global_path_segment_length", type=float, required=False)
 parser.add_argument("--noise_decay_steps", type=int, required=False)
 parser.add_argument("--variant", type=str, required=False)
 parser.add_argument("--gamma", type=float, required=False)
+parser.add_argument(
+    "--override_run_id", type=int, required=False, help="Override run ID", default=None
+)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -113,7 +116,7 @@ init_logging(log_level, f"./logs/velmwheel/default{run_id}.log")
 # ---------------------------------------------------------------------------- #
 
 model_save_path, tb_log_name = get_model_save_path_and_tb_log_name(
-    algorithm, model_path
+    algorithm, model_path, args.override_run_id
 )
 
 extra_params = dict(

@@ -78,4 +78,7 @@ class Metrics:
         self._data["rewards"].append(self._data["episode_reward"])
 
     def register_global_episode_result(self, result: int):
-        self._data["global_results"][-1] = result
+        if len(self._data["global_results"]) == 0:
+            self._data["global_results"].append(result)
+        else:
+            self._data["global_results"][-1] = result
