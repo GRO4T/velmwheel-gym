@@ -109,6 +109,42 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         )
 
     def _observe(self):
+        if "CNN" in self._variant:
+            step_normalized = 2 * self._steps / self.max_episode_steps - 1
+            final_goal_flag = 1.0 if self.is_final_goal else -1.0
+            # map lidar points to image
+            lidar_map = np.zeros((80, 80), dtype=np.uint8)
+            for xl, yl in zip(self.robot.xls, self.robot.yls):
+                xl_rel = xl - self.robot.xr
+                yl_rel = yl - self.robot.yr
+                if (
+                    xl_rel <= 4.0
+                    and xl_rel >= -4.0
+                    and yl_rel <= 4.0
+                    and yl_rel >= -4.0
+                ):
+                    xl_pixel = int((xl_rel + 4.0) * 10)
+                    yl_pixel = 79 - int((yl_rel + 4.0) * 10)
+                    lidar_map[yl_pixel, xl_pixel] = 255
+            # save lidar map as bitmap
+            from PIL import Image
+
+            im = Image.fromarray(lidar_map, mode="L").convert("1")
+            im.save("lidar_map.png")
+            obs = {
+                "scalar": np.array(
+                    [
+                        step_normalized,
+                        self.robot.thr,
+                        self.goal.x,
+                        self.goal.y,
+                        final_goal_flag,
+                    ]
+                ),
+                "image": lidar_map,
+            }
+            return obs
+
         step_normalized = 2 * self._steps / self.max_episode_steps - 1
 
         obs = [
@@ -118,10 +154,10 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             self.goal.y,
         ]
 
-        if self._variant == "EasierFollowing":
+        if "EasierFollowing" in self._variant:
             obs.append(1.0 if self.is_final_goal else -1.0)
 
-        if self._variant != "NoGlobalGuidance":
+        if "NoGlobalGuidance" not in self._variant:
             obs.extend(
                 get_n_points_evenly_spaced_on_path(
                     self._global_path_segment.points,
@@ -185,6 +221,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             ):
                 self._advance_to_next_level()
                 self._renderer.reset()
+                self._lidar_ranges = self._calculate_lidar_ranges()
 
         if (
             self._training_mode

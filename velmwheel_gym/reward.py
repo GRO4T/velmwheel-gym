@@ -61,7 +61,7 @@ def calculate_reward(
     min_obstacle_dist: float,
     robot_w: float,
 ) -> tuple[bool, float, bool]:
-    if variant == "NoGlobalGuidance":
+    if "NoGlobalGuidance" in variant:
         coeffs = NO_GLOBAL_GUIDANCE_COEFFS
     else:
         coeffs = GLOBAL_GUIDANCE_COEFFS
@@ -103,7 +103,7 @@ def calculate_reward(
         -1.0, (np.pi - abs(alpha)) / np.pi
     )
 
-    if variant == "EasierFollowing":
+    if "EasierFollowing" in variant:
         threshold = (
             difficulty.goal_reached_threshold
             if is_final_goal
@@ -114,7 +114,7 @@ def calculate_reward(
     if robot_position.dist(goal) < threshold:
         # Add reward for remaining points on the global guidance path
         if (
-            variant != "NoGlobalGuidance"
+            "NoGlobalGuidance" not in variant
             and global_guidance_path.original_num_points > 0
         ):
             reward += (
@@ -125,7 +125,7 @@ def calculate_reward(
         reward += coeffs.success_reward + misalignment_component
         return True, reward, True
 
-    if variant != "NoGlobalGuidance" and num_passed_points > 0:
+    if "NoGlobalGuidance" not in variant and num_passed_points > 0:
         # Add reward for reaching global guidance path points
         reward += (coeffs.path_following_reward + misalignment_component) * (
             num_passed_points / global_guidance_path.original_num_points

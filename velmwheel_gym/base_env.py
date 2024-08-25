@@ -68,6 +68,24 @@ class VelmwheelBaseEnv(gym.Env):
                     shape=(4 + TARGET_LIDAR_RAY_COUNT,),
                     dtype=np.float64,
                 )
+            case "NoGlobalGuidanceEasierFollowing":
+                self.observation_space = gym.spaces.Box(
+                    low=-1.0,
+                    high=1.0,
+                    shape=(5 + TARGET_LIDAR_RAY_COUNT,),
+                    dtype=np.float64,
+                )
+            case "CNN":
+                self.observation_space = gym.spaces.Dict(
+                    {
+                        "image": gym.spaces.Box(
+                            low=0, high=1, shape=(80, 80), dtype=np.uint8
+                        ),
+                        "scalar": gym.spaces.Box(
+                            low=-1.0, high=1.0, shape=(5,), dtype=np.float64
+                        ),
+                    }
+                )
 
         self._total_steps = 0
         self._steps = 0
@@ -129,8 +147,8 @@ class VelmwheelBaseEnv(gym.Env):
         robot_position = self.robot_position
         obs[2] -= robot_position[0]
         obs[3] -= robot_position[1]
-        if self._variant != "NoGlobalGuidance":
-            global_path_start_idx = 5 if self._variant == "EasierFollowing" else 4
+        if "NoGlobalGuidance" not in self._variant:
+            global_path_start_idx = 5 if "EasierFollowing" in self._variant else 4
             for i in range(
                 global_path_start_idx,
                 global_path_start_idx + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS,
@@ -144,8 +162,8 @@ class VelmwheelBaseEnv(gym.Env):
         obs[1] /= np.pi
         obs[2] /= COORDINATES_NORMALIZATION_FACTOR
         obs[3] /= COORDINATES_NORMALIZATION_FACTOR
-        if self._variant != "NoGlobalGuidance":
-            global_path_start_idx = 5 if self._variant == "EasierFollowing" else 4
+        if "NoGlobalGuidance" not in self._variant:
+            global_path_start_idx = 5 if "EasierFollowing" in self._variant else 4
             for i in range(
                 global_path_start_idx,
                 global_path_start_idx + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS,

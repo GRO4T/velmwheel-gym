@@ -97,6 +97,22 @@ NAVIGATION_DIFFICULTIES = [
         goal_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
         raw_lidar_ray_count=180,
     ),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacles=[
+            (0.0, 3.0),
+            (0.0, -3.0),
+            (3.0, 0.0),
+            (-3.0, 0.0),
+            (0.0, 0.0),
+        ],
+        dynamic_obstacle_motion=False,
+        extend_segment=True,
+        starting_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
+        goal_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
+        raw_lidar_ray_count=180,
+    ),
 ]
 
 STATS_BUFFER_SIZE = 50

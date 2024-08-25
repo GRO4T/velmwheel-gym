@@ -133,6 +133,7 @@ def create_model(
             )
             model = TD3(
                 "MlpPolicy",
+                # "MultiInputPolicy",
                 env,
                 verbose=1,
                 action_noise=action_noise,
@@ -245,10 +246,18 @@ def load_model(
                 model_path,
                 env=env,
                 learning_starts=int(param_reader.read("learning_starts", "TD3")),
+                batch_size=int(param_reader.read("batch_size", "TD3")),
             )
 
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
+
+            model.actor.optimizer.param_groups[0]["lr"] = float(
+                param_reader.read("actor_lr", "TD3")
+            )
+            model.critic.optimizer.param_groups[0]["lr"] = float(
+                param_reader.read("critic_lr", "TD3")
+            )
 
             # for param in model.actor.parameters():
             #     param.requires_grad = False
