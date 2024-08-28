@@ -75,6 +75,12 @@ class StartPositionAndGoalGenerator:
         #     pickle.dump(self._stats, f)
 
     def generate_next(self):
+        if self._difficulty.maneuvers:
+            maneuver = random.SystemRandom().choice(self._difficulty.maneuvers)
+            self._starting_position = maneuver[0]
+            self._goal = maneuver[1]
+            return
+
         # sx = random.SystemRandom().uniform(0.0, 6.0)
         # sy = random.SystemRandom().uniform(-4.0, -8.0)
         # sx = random.SystemRandom().uniform(-2.0, 2.0)

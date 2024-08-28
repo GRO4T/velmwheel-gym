@@ -19,3 +19,4 @@ class NavigationDifficulty(NamedTuple):
     starting_rect: tuple[Point, Point]
     goal_rect: tuple[Point, Point]
     raw_lidar_ray_count: int
+    maneuvers: list[tuple[Point, Point]]

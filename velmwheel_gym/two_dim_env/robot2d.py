@@ -101,13 +101,13 @@ class Robot2D:
                 self.xr = self._start_position_and_goal_generator.goal.x
                 self.yr = self._start_position_and_goal_generator.goal.y
                 self.scanning()
-                if self.is_crashed(threshold=0.6):
+                if self.is_crashed(threshold=0.7):
                     continue
                 self.xr = self._start_position_and_goal_generator.starting_position.x
                 self.yr = self._start_position_and_goal_generator.starting_position.y
                 self.thr = self._start_position_and_goal_generator.starting_rotation
                 self.scanning()
-                if not self.is_crashed(threshold=0.6):
+                if not self.is_crashed(threshold=0.7):
                     break
 
         self.xg = self._start_position_and_goal_generator.goal.x
@@ -132,7 +132,7 @@ class Robot2D:
         else:
             logger.debug("Calculating new global path")
             a_star = AStarPlanner(
-                self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.5
+                self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.7
             )
             px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
 

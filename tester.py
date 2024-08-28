@@ -1,3 +1,4 @@
+import argparse
 import configparser
 import math
 import pickle
@@ -24,11 +25,10 @@ parser.add_argument(
     "--render", type=bool, help="Render the environment", required=False
 )
 parser.add_argument(
-    "--generate_next_goal",
-    type=str,
-    help="Generate a new goal",
+    "--random",
+    action=argparse.BooleanOptionalAction,
+    help="Generate random goals",
     required=False,
-    default="false",
 )
 parser.add_argument(
     "--save_footprint",
@@ -43,6 +43,12 @@ parser.add_argument(
     help="Time limit for the episode",
     required=False,
     default=3600,
+)
+parser.add_argument(
+    "--benchmark",
+    action=argparse.BooleanOptionalAction,
+    help="Benchmark the model",
+    required=False,
 )
 
 args = parser.parse_args()
@@ -63,9 +69,7 @@ goal_y = float(param_reader.read("goal_y"))
 start_x = float(param_reader.read("start_x"))
 start_y = float(param_reader.read("start_y"))
 render = param_reader.read("render")
-generate_next_goal = (
-    True if param_reader.read("generate_next_goal") == "true" else False
-)
+randomize_goals = args.random
 save_footprint = True if param_reader.read("save_footprint") == "true" else False
 time_limit = int(param_reader.read("time_limit"))
 
@@ -96,12 +100,12 @@ model, _ = load_model(
     algorithm, env, param_reader, model_path, replay_buffer_path, test_mode=True
 )
 
-obs, _ = env.reset(
-    options={
-        "starting_position": Point(start_x, start_y),
-        "goal": Point(goal_x, goal_y),
-    }
+options = (
+    None
+    if randomize_goals
+    else {"starting_position": Point(start_x, start_y), "goal": Point(goal_x, goal_y)}
 )
+obs, _ = env.reset(options=options)
 
 footprints = {"position": [], "orientation": [], "time": [], "obstacles": []}
 steps = 0
@@ -145,7 +149,7 @@ while True:
         else:
             print("Collision detected!")
         env.step([0.0, 0.0, 0.0])
-        if generate_next_goal:
+        if randomize_goals:
             steps = 0
             obs, _ = env.reset()
         else:
@@ -157,7 +161,7 @@ while True:
     if dist_to_goal < difficulty.goal_reached_threshold:
         print("Goal reached!")
         env.step([0.0, 0.0, 0.0])
-        if generate_next_goal:
+        if randomize_goals:
             steps = 0
             obs, _ = env.reset()
         else:

@@ -29,6 +29,7 @@ NAVIGATION_DIFFICULTIES = [
         starting_rect=(Point(-2.0, 2.0), Point(-2.0, 2.0)),
         goal_rect=(Point(0.0, 0.0), Point(0.0, 0.0)),
         raw_lidar_ray_count=45,
+        maneuvers=[],
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
@@ -39,6 +40,7 @@ NAVIGATION_DIFFICULTIES = [
         starting_rect=(Point(-2.0, 2.0), Point(-2.0, 2.0)),
         goal_rect=(Point(-2.0, -2.0), Point(2.0, 2.0)),
         raw_lidar_ray_count=45,
+        maneuvers=[],
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
@@ -49,6 +51,7 @@ NAVIGATION_DIFFICULTIES = [
         starting_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
         goal_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
         raw_lidar_ray_count=45,
+        maneuvers=[],
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
@@ -64,6 +67,7 @@ NAVIGATION_DIFFICULTIES = [
         starting_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
         goal_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
         raw_lidar_ray_count=45,
+        maneuvers=[],
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
@@ -80,6 +84,7 @@ NAVIGATION_DIFFICULTIES = [
         starting_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
         goal_rect=(Point(-4.0, 4.0), Point(-4.0, 4.0)),
         raw_lidar_ray_count=45,
+        maneuvers=[],
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
@@ -96,6 +101,7 @@ NAVIGATION_DIFFICULTIES = [
         starting_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
         goal_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
         raw_lidar_ray_count=180,
+        maneuvers=[],
     ),
     NavigationDifficulty(
         goal_reached_threshold=0.25,
@@ -112,6 +118,46 @@ NAVIGATION_DIFFICULTIES = [
         starting_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
         goal_rect=(Point(-4.0, 4.0), Point(-8.0, 4.0)),
         raw_lidar_ray_count=180,
+        maneuvers=[],
+    ),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacles=[
+            (0.0, 3.0),
+            (0.0, -3.0),
+            (3.0, 0.0),
+            (-3.0, 0.0),
+            (0.0, 0.0),
+        ],
+        dynamic_obstacle_motion=False,
+        extend_segment=True,
+        starting_rect=(Point(-9.0, 9.0), Point(-9.0, 9.0)),
+        goal_rect=(Point(-9.0, 9.0), Point(-9.0, 9.0)),
+        raw_lidar_ray_count=180,
+        maneuvers=[],
+    ),
+    NavigationDifficulty(
+        goal_reached_threshold=0.25,
+        driving_in_path_tolerance=1.0,
+        dynamic_obstacles=[
+            (0.0, 0.0),
+            (-2.0, -5.0),
+            (-3.0, -5.0),
+            (-4.0, -5.0),
+        ],
+        dynamic_obstacle_motion=False,
+        extend_segment=True,
+        starting_rect=(Point(-9.0, 9.0), Point(-9.0, 9.0)),
+        goal_rect=(Point(-9.0, 9.0), Point(-9.0, 9.0)),
+        raw_lidar_ray_count=180,
+        maneuvers=[
+            (Point(-3.5, -2.0), Point(-3.5, 0.75)),
+            # (Point(-8.0, -8.0), Point(3.0, -9.0)),
+            (Point(0.0, -2.0), Point(0.0, 2.0)),
+            (Point(0.0, -5.0), Point(-5.0, -5.0)),
+            (Point(8.0, 1.0), Point(3.0, 1.0)),
+        ],
     ),
 ]
 

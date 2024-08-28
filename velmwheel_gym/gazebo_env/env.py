@@ -262,15 +262,9 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
 
         num_passed_points = self._global_path_segment.update(self._robot.position)
 
-        # alpha = angle_between_robot_and_goal(
-        #     self.robot_position, self._get_current_target(), self._robot.theta
-        # )
-        driving_vector = np.array([self._vx, self._vy])
-        driving_vector /= np.linalg.norm(driving_vector)
-        robot_heading_vector = np.array(
-            [np.cos(self._robot.theta), np.sin(self._robot.theta)]
+        alpha = angle_between_robot_and_goal(
+            self.robot_position, self.sub_goal, self._robot.theta
         )
-        alpha = np.arccos(np.dot(robot_heading_vector, driving_vector))
 
         min_obstacle_dist = min(self._robot.lidar_data)
 
@@ -377,7 +371,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
                 self._simulation_reinit()
 
             self._get_global_path()
-            self._spawn_random_obstacles(self._difficulty.dynamic_obstacle_count)
+            self._spawn_random_obstacles()
 
             self._robot.position_tstamp = time.time()
             self._robot.lidar_tstamp = time.time()
@@ -405,34 +399,14 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             self._global_path_segment.points,
         )
 
-    def _spawn_random_obstacles(self, n: int = 5):
-        logger.debug(f"Spawning {n} random obstacles")
-        from velmwheel_gym.constants import OBSTACLES_EASY
-
-        n = len(OBSTACLES_EASY)
+    def _spawn_random_obstacles(self):
+        n = len(self._difficulty.dynamic_obstacles)
 
         self._dynamic_obstacles_start_positions = [None] * n
         self._dynamic_obstacles_target_positions = [None] * n
         for i in range(n):
-            # while True:
-            #     x = np.random.uniform(-9, 9)
-            #     y = np.random.uniform(-9, 9)
-            #     if (
-            #         Point(x, y).dist(self.goal) > 2.0
-            #         and Point(x, y).dist(self.starting_position) > 2.0
-            #     ):
-            #         break
-
-            # while True:
-            #     tx = np.random.uniform(-9, 9)
-            #     ty = np.random.uniform(-9, 9)
-            #     if (
-            #         Point(tx, ty).dist(self.goal) > 2.0
-            #         and Point(tx, ty).dist(self.starting_position) > 2.0
-            #     ):
-            #         break
-            x = OBSTACLES_EASY[i][0]
-            y = OBSTACLES_EASY[i][1]
+            x = self._difficulty.dynamic_obstacles[i][0]
+            y = self._difficulty.dynamic_obstacles[i][1]
             tx = x
             ty = y
 
@@ -517,7 +491,11 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
                 [self.sub_goal.x, self.sub_goal.y],
             )
         )
-        obs.extend(self._robot.lidar_data)
+        ranges = [
+            min(self._robot.lidar_data[i : i + 12])
+            for i in range(0, len(self._robot.lidar_data), 12)
+        ]
+        obs.extend(ranges)
         return self._normalize_observation(self._relative_to_robot(np.array(obs)))
 
     def _publish_goal(self):

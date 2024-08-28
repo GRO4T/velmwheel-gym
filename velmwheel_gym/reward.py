@@ -21,26 +21,36 @@ class RewardFuncCoeffs:
     obstacle_penalty: float
 
 
+# GLOBAL_GUIDANCE_COEFFS = RewardFuncCoeffs(
+#     collision_penalty=-0.6,
+#     timeout_penalty=-0.5,
+#     success_reward=0.4,
+#     path_following_reward=0.4,
+#     distance_factor=0.1,
+#     misalignment_factor=0.1,
+#     rotation_velocity_penalty=-0.1,
+#     obstacle_penalty=-0.1,
+# )
 GLOBAL_GUIDANCE_COEFFS = RewardFuncCoeffs(
-    collision_penalty=-0.6,
-    timeout_penalty=-0.5,
-    success_reward=0.4,
-    path_following_reward=0.4,
-    distance_factor=0.1,
-    misalignment_factor=0.1,
+    collision_penalty=-20.0,
+    timeout_penalty=-20.0,
+    success_reward=20.0,
+    path_following_reward=5.0,
+    distance_factor=2.5,
+    misalignment_factor=0.6,
     rotation_velocity_penalty=-0.1,
-    obstacle_penalty=-0.1,
+    obstacle_penalty=-0.2,
 )
 
 NO_GLOBAL_GUIDANCE_COEFFS = RewardFuncCoeffs(
-    collision_penalty=-0.7,
-    timeout_penalty=-0.5,
-    success_reward=0.5,
+    collision_penalty=-20.0,
+    timeout_penalty=-20.0,
+    success_reward=20.0,
     path_following_reward=0.0,
-    distance_factor=0.1,
-    misalignment_factor=0.1,
+    distance_factor=2.5,
+    misalignment_factor=0.6,
     rotation_velocity_penalty=-0.1,
-    obstacle_penalty=-0.1,
+    obstacle_penalty=-0.2,
 )
 
 
@@ -61,47 +71,35 @@ def calculate_reward(
     min_obstacle_dist: float,
     robot_w: float,
 ) -> tuple[bool, float, bool]:
+    success = False
+    terminated = False
+    reward = 0.0
     if "NoGlobalGuidance" in variant:
         coeffs = NO_GLOBAL_GUIDANCE_COEFFS
     else:
         coeffs = GLOBAL_GUIDANCE_COEFFS
 
-    reward = 0.0
-
     # Robot collided with an obstacle
     if is_robot_collide:
-        # Add penalty for all other negative factors as if all steps until
-        # the end of the episode were taken in the worst possible way
-        reward += (
-            (max_episode_steps - steps)
-            * (
-                coeffs.obstacle_penalty
-                + coeffs.rotation_velocity_penalty
-                - coeffs.misalignment_factor
-                - coeffs.distance_factor
-            )
-            / max_episode_steps
-        )
+        terminated = True
         reward += coeffs.collision_penalty
-        return False, reward, True
 
     # Robot reached the maximum number of steps
-    if steps == max_episode_steps:
-        return False, coeffs.timeout_penalty, True
+    # if steps == max_episode_steps:
+    #     terminated = True
+    #     reward += coeffs.timeout_penalty
 
     # Apply penalty for driving too close to obstacles
-    if min_obstacle_dist < 1.0:
-        reward += (
-            coeffs.obstacle_penalty * (1.0 - min_obstacle_dist) / max_episode_steps
-        )
+    if min_obstacle_dist < 1.5:
+        reward += coeffs.obstacle_penalty * (1.5 - min_obstacle_dist)
 
     # Apply penalty for high rotation velocity
-    reward += coeffs.rotation_velocity_penalty * abs(robot_w) / max_episode_steps
+    if abs(robot_w) > 0.25:
+        reward += coeffs.rotation_velocity_penalty * abs(robot_w)
 
     # Apply penalty for misalignment with the goal
-    misalignment_component = coeffs.misalignment_factor * max(
-        -1.0, (np.pi - abs(alpha)) / np.pi
-    )
+    if abs(alpha) > np.pi / 6:
+        reward += coeffs.misalignment_factor * (np.pi / 6 - abs(alpha))
 
     if "EasierFollowing" in variant:
         threshold = (
@@ -112,29 +110,18 @@ def calculate_reward(
     else:
         threshold = difficulty.goal_reached_threshold
     if robot_position.dist(goal) < threshold:
-        # Add reward for remaining points on the global guidance path
-        if (
-            "NoGlobalGuidance" not in variant
-            and global_guidance_path.original_num_points > 0
-        ):
-            reward += (
-                (coeffs.path_following_reward + misalignment_component)
-                * len(global_guidance_path.points)
-                / global_guidance_path.original_num_points
-            )
-        reward += coeffs.success_reward + misalignment_component
-        return True, reward, True
+        reward += coeffs.success_reward
+        success = True
+        terminated = True
 
     if "NoGlobalGuidance" not in variant and num_passed_points > 0:
         # Add reward for reaching global guidance path points
-        reward += (coeffs.path_following_reward + misalignment_component) * (
-            num_passed_points / global_guidance_path.original_num_points
-        )
+        reward += coeffs.path_following_reward * num_passed_points
     else:
         # Add reward for driving towards the goal
         d1 = prev_robot_position.dist(goal)
         d2 = robot_position.dist(goal)
-        distance_component = coeffs.distance_factor * (d1 - d2) * 40
-        reward += (distance_component + misalignment_component) / max_episode_steps
+        distance_component = coeffs.distance_factor * (d1 - d2)
+        reward += distance_component
 
-    return False, reward, False
+    return success, reward, terminated

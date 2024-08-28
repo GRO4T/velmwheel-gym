@@ -141,7 +141,8 @@ class VelmwheelRobot:
     @property
     def is_collide(self) -> bool:
         """Flag signalling whether robot's is in collision with an obstacle."""
-        return self._is_collide
+        min_obstacle_dist = min(self._lidar_data)
+        return min_obstacle_dist < 0.6
 
     @property
     def real_time_factor(self) -> float:
@@ -262,7 +263,7 @@ class VelmwheelRobot:
         self._lidar_data = []
         self._lidar_pointcloud_raw = pointcloud2_to_array(message)
 
-        for point in pointcloud2_to_array(message)[::12]:
+        for point in pointcloud2_to_array(message)[::2]:
             x, y, _, _ = point
             point_2d = np.array([x, y])
             r = np.sqrt(point_2d.dot(point_2d))
