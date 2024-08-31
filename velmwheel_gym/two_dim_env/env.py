@@ -18,6 +18,7 @@ from velmwheel_gym.global_guidance_path import (
     GlobalGuidancePath,
     get_n_points_evenly_spaced_on_path,
     next_segment,
+    sliding_segment,
 )
 from velmwheel_gym.reward import calculate_reward
 from velmwheel_gym.two_dim_env.renderer import Env2DRenderer
@@ -190,6 +191,8 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         alpha = angle_between_robot_and_goal(
             self.robot_position, self.goal, self.robot.thr
         )
+        if alpha > np.pi / 2:
+            alpha = np.pi - alpha
 
         self._lidar_ranges = self._calculate_lidar_ranges()
         min_obstacle_dist = min(self._lidar_ranges)
@@ -201,7 +204,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             Point(*self.robot_position),
             alpha,
             self.goal,
-            self.robot.is_crashed(),
+            self.robot.is_crashed(threshold=0.6),
             self._difficulty,
             num_passed_points,
             self._global_path_segment,
@@ -234,6 +237,18 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             self._metrics.export(self._get_current_level(), terminated)
 
         obs = self._observe()
+
+        # if num_passed_points > 0:
+        #     (
+        #         self._global_path.points,
+        #         self._global_path_segment,
+        #     ) = sliding_segment(
+        #         self._global_path.points,
+        #         self._global_path_segment.points,
+        #         Point(*self.robot_position),
+        #         self._difficulty,
+        #         self._global_path_segment_length,
+        #     )
 
         info = {}
         if success and not self.is_final_goal:

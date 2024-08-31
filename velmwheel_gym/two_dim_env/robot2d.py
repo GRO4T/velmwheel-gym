@@ -95,6 +95,9 @@ class Robot2D:
                 "starting_position"
             ]
             self._start_position_and_goal_generator._goal = options["goal"]
+            self.xr = self._start_position_and_goal_generator.starting_position.x
+            self.yr = self._start_position_and_goal_generator.starting_position.y
+            self.thr = 0.0
         else:
             while True:
                 self._start_position_and_goal_generator.generate_next()
@@ -143,9 +146,9 @@ class Robot2D:
             self.global_path = GlobalGuidancePath(
                 Point(self.xr, self.yr), points, self._difficulty
             )
-            self._global_path_cache[
-                (Point(self.xr, self.yr), Point(self.xg, self.yg))
-            ] = copy.deepcopy(self.global_path)
+            # self._global_path_cache[
+            #     (Point(self.xr, self.yr), Point(self.xg, self.yg))
+            # ] = copy.deepcopy(self.global_path)
             # with open("state/nav2_cache.pkl", "wb") as f:
             #     pickle.dump(self._global_path_cache, f)
         self.global_path.points, self.global_path_segment = next_segment(

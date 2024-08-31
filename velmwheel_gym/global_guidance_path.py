@@ -101,3 +101,29 @@ def next_segment(
     return points[split_idx:], GlobalGuidancePath(
         robot_position, current_segment + new_segment_points, difficulty
     )
+
+
+def sliding_segment(
+    points: list[Point],
+    current_segment: list[Point],
+    robot_position: Point,
+    difficulty: NavigationDifficulty,
+    segment_length: float = 5.0,
+) -> tuple[list[Point], GlobalGuidancePath]:
+    delta = 0.0
+    if current_segment:
+        prev = current_segment[0]
+        for point in current_segment:
+            delta += prev.dist(point)
+    split_idx = len(points)
+    new_segment_points = copy.deepcopy(points)
+    for idx, point in enumerate(points):
+        delta += point.dist(prev)
+        prev = point
+        if delta >= segment_length:
+            new_segment_points = copy.deepcopy(points[: idx + 1])
+            split_idx = idx + 1
+            break
+    return points[split_idx:], GlobalGuidancePath(
+        robot_position, current_segment + new_segment_points, difficulty
+    )

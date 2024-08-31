@@ -78,6 +78,7 @@ class StartPositionAndGoalGenerator:
         if self._difficulty.maneuvers:
             maneuver = random.SystemRandom().choice(self._difficulty.maneuvers)
             self._starting_position = maneuver[0]
+            self._starting_rotation = random.SystemRandom().uniform(-np.pi, np.pi)
             self._goal = maneuver[1]
             return
 

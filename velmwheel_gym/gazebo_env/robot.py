@@ -160,8 +160,6 @@ class VelmwheelRobot:
         self.stop()
         self._ignore_collisions_until = time.time() + 1
         self._is_collide = False
-        self._position = None
-        self._lidar_data = None
 
         while self._simulation_time is None:
             rclpy.spin_once(self._node, timeout_sec=1.0)
@@ -172,6 +170,10 @@ class VelmwheelRobot:
         self._set_entity_pose(starting_position)
         self._set_laser_scan_matcher_pose(starting_position)
         self._set_encoders_pose(starting_position)
+
+        self._position = None
+        self._lidar_data = None
+        time.sleep(0.1)
 
         while self._position is None or self._lidar_data is None:
             rclpy.spin_once(self._node, timeout_sec=1.0)

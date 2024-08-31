@@ -69,7 +69,6 @@ goal_y = float(param_reader.read("goal_y"))
 start_x = float(param_reader.read("start_x"))
 start_y = float(param_reader.read("start_y"))
 render = param_reader.read("render")
-randomize_goals = args.random
 save_footprint = True if param_reader.read("save_footprint") == "true" else False
 time_limit = int(param_reader.read("time_limit"))
 
@@ -79,9 +78,6 @@ init_logging(log_level)
 #                               Testing the model                              #
 # ---------------------------------------------------------------------------- #
 
-starting_position = Point(0.0, 0.0)
-goal = [goal_x, goal_y]
-min_dist_to_goal = math.inf  # pylint: disable=invalid-name
 difficulty = NAVIGATION_DIFFICULTIES[navigation_difficulty_level]
 
 env = gym.make(
@@ -100,97 +96,136 @@ model, _ = load_model(
     algorithm, env, param_reader, model_path, replay_buffer_path, test_mode=True
 )
 
-options = (
-    None
-    if randomize_goals
-    else {"starting_position": Point(start_x, start_y), "goal": Point(goal_x, goal_y)}
-)
-obs, _ = env.reset(options=options)
 
-footprints = {"position": [], "orientation": [], "time": [], "obstacles": []}
-steps = 0
-start = time.time()
-total = 0.0
-while True:
-    action, _ = model.predict(obs, deterministic=True)
+def run_once(start_pos, goal) -> dict:
+    run = {
+        "actions": [],
+        "velocities": [],
+        "min_obstacle_dists": [],
+        "min_goal_dist": math.inf,
+        "start": start_pos,
+        "end": goal,
+        "duration": None,
+        "footprints": {
+            "positions": [],
+            "orientations": [],
+            "time": [],
+            "obstacles": [],
+        },
+        "success": False,
+    }
 
-    obs, reward, terminated, truncated, info = env.step(action)
-    if terminated:
-        steps = 0
+    start = time.time()
+    total = 0.0
 
-    footprints["position"].append(env.env.robot_position)
-    footprints["time"].append(start)
+    options = (
+        None if start_pos is None else {"starting_position": start_pos, "goal": goal}
+    )
+    obs, _ = env.reset(options=options)
+    while True:
+        action, _ = model.predict(obs, deterministic=True)
+        run["actions"].append(action)
 
-    # footprints["obstacles"].append(
-    #     [(x, y) for x, y in zip(env.env.robot.env.dynamic_obstacles_x, env.env.robot.env.dynamic_obstacles_y)]
-    # )
+        obs, reward, terminated, truncated, info = env.step(action)
 
-    print("----------------------------------------------")
-    print(f"{action=}")
-    print(f"{reward=}")
-    print(f"{terminated=}")
-    dist_to_goal = math.dist(env.env.goal, env.env.robot_position)
-    print(f"{dist_to_goal=}")
-    print(f"{min_dist_to_goal=}")
-    print(f"{env.env.starting_position=}")
-    print(f"{env.env.goal=}")
-    print(f"{env.env.robot_position=}")
-    print(f"{info=}")
-    print(f"{obs=}")
-    print("----------------------------------------------")
+        run["footprints"]["positions"].append(env.env.robot_position)
+        run["footprints"]["time"].append(start)
 
-    if info.get("status", None) == "segment_reached":
-        steps = 0
-        env.reset()
+        # footprints["obstacles"].append(
+        #     [(x, y) for x, y in zip(env.env.robot.env.dynamic_obstacles_x, env.env.robot.env.dynamic_obstacles_y)]
+        # )
 
-    if terminated and reward < 0:
-        if info.get("status", None) == "max_steps_reached":
-            print("Max steps reached!")
-        else:
+        dist_to_goal = math.dist(env.env.goal, env.env.robot_position)
+
+        print("----------------------------------------------")
+        print(f"{action=}")
+        print(f"{reward=}")
+        print(f"{terminated=}")
+        print(f"{truncated=}")
+        print(f"{dist_to_goal=}")
+        print(f"min_goal_dist{run['min_goal_dist']}")
+        print(f"{env.env.starting_position=}")
+        print(f"{env.env.goal=}")
+        print(f"{env.env.robot_position=}")
+        print(f"{info=}")
+        print(f"{obs=}")
+        print("----------------------------------------------")
+
+        if info.get("status", None) == "segment_reached":
+            env.reset()
+
+        if terminated and reward < 0:
             print("Collision detected!")
-        env.step([0.0, 0.0, 0.0])
-        if randomize_goals:
-            steps = 0
-            obs, _ = env.reset()
-        else:
+            env.step([0.0, 0.0, 0.0])
             break
 
-    if dist_to_goal < min_dist_to_goal:
-        min_dist_to_goal = dist_to_goal
-
-    if dist_to_goal < difficulty.goal_reached_threshold:
-        print("Goal reached!")
-        env.step([0.0, 0.0, 0.0])
-        if randomize_goals:
-            steps = 0
-            obs, _ = env.reset()
-        else:
+        if truncated:
+            print("Max steps reached!")
+            env.step([0.0, 0.0, 0.0])
             break
 
-    steps += 1
-    # if steps > env.env.max_episode_steps:
-    #     print("Max steps reached!")
-    #     env.step([0.0, 0.0, 0.0])
-    #     if not env.env.is_final_goal or (env.env.is_final_goal and generate_next_goal):
-    #         steps = 0
-    #         obs, _ = env.reset()
-    #     else:
-    #         break
+        if dist_to_goal < run["min_goal_dist"]:
+            run["min_goal_dist"] = dist_to_goal
 
-    if render == "true":
-        env.render()
+        if dist_to_goal < difficulty.goal_reached_threshold:
+            print("Goal reached!")
+            env.step([0.0, 0.0, 0.0])
+            run["success"] = True
+            break
 
-    end = time.time()
-    elapsed = end - start
-    start = end
-    # if elapsed < 0.050:
-    #     time.sleep(0.050 - elapsed)
-    print(f"fps: {1 / elapsed}")
+        if render == "true":
+            env.render()
 
-    if total > time_limit:
-        print("Time limit reached!")
-        env.step([0.0, 0.0, 0.0])
-        break
+        end = time.time()
+        elapsed = end - start
+        start = end
+        # if elapsed < 0.050:
+        #     time.sleep(0.050 - elapsed)
+        print(f"fps: {1 / elapsed}")
 
-with open("footprint.pkl", "wb") as f:
-    pickle.dump(footprints, f)
+        if total > time_limit:
+            print("Time limit reached!")
+            env.step([0.0, 0.0, 0.0])
+            break
+
+    run["duration"] = total
+    return run
+
+
+runs = []
+
+if args.benchmark:
+    points = [
+        Point(3.0, 3.0),
+        Point(3.0, -3.0),
+        Point(-3.0, 3.0),
+        Point(-3.0, -3.0),
+        Point(7.0, 7.0),
+        Point(-7.0, 7.0),
+        Point(7.0, -7.0),
+        Point(-7.0, -7.0),
+    ]
+    success_rate = 0.0
+    attempts = 0
+    combos = [(x, y) for x in points for y in points if x != y]
+    for i in range(1):
+        for start, goal in combos:
+            attempts += 1
+            run = run_once(start, goal)
+            success = "success" if run["success"] else "failure"
+            success_rate = (
+                success_rate * (attempts - 1) + (1 if run["success"] else 0)
+            ) / attempts
+            print(
+                f"[benchmark] success_rate={round(success_rate, 2)} min_goal_dist={round(run['min_goal_dist'], 2)} i: {i} {start} -> {goal}: {success}"
+            )
+            runs.append(run)
+
+elif args.random:
+    while True:
+        run_once(start_pos=None, goal=None)
+else:
+    runs.append(run_once(Point(start_x, start_y), Point(goal_x, goal_y)))
+
+with open("run.pkl", "wb") as f:
+    pickle.dump(runs, f)

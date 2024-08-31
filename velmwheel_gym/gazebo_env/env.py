@@ -265,6 +265,8 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         alpha = angle_between_robot_and_goal(
             self.robot_position, self.sub_goal, self._robot.theta
         )
+        if alpha > np.pi / 2:
+            alpha = np.pi - alpha
 
         min_obstacle_dist = min(self._robot.lidar_data)
 
@@ -571,15 +573,15 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         self._global_path = GlobalGuidancePath(
             self._robot.position, points, self._difficulty
         )
-        if (
-            self._training_mode
-            and (self.starting_position, self.goal) not in self._global_path_cache
-        ):
-            self._global_path_cache[(self.starting_position, self.goal)] = deepcopy(
-                self._global_path
-            )
-            # with open("state/nav2_cache.pkl", "wb") as f:
-            #     pickle.dump(self._global_path_cache, f)
+        # if (
+        #     self._training_mode
+        #     and (self.starting_position, self.goal) not in self._global_path_cache
+        # ):
+        # self._global_path_cache[(self.starting_position, self.goal)] = deepcopy(
+        #     self._global_path
+        # )
+        # with open("state/nav2_cache.pkl", "wb") as f:
+        #     pickle.dump(self._global_path_cache, f)
 
     def _analyze_path(self, points: list[Point]):
         logger.debug(f"New path has {len(points)} points")
