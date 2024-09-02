@@ -62,7 +62,6 @@ parser.add_argument(
     type=int,
     help="Number of parallel environments",
     required=False,
-    default=1,
 )
 parser.add_argument(
     "--save_freq", type=int, help="Frequency of saving the model", required=False
@@ -90,6 +89,7 @@ parser.add_argument("--gamma", type=float, required=False)
 parser.add_argument(
     "--override_run_id", type=int, required=False, help="Override run ID", default=None
 )
+parser.add_argument("--wb_id", type=str, required=False, help="Wandb ID", default=None)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -132,12 +132,7 @@ extra_params = dict(
     variant=param_reader.read("variant", "VelmwheelGym"),
     env_name=gym_env,
 )
-if envs > 1:
-    env = make_vec_env(gym_env, n_envs=4, **extra_params)
-else:
-    # env = gym.make(gym_env, **extra_params)
-    env = make_vec_env(gym_env, n_envs=1, env_kwargs=extra_params)
-    # env = VecCheckNan(env, raise_exception=True)
+env = make_vec_env(gym_env, n_envs=envs, env_kwargs=extra_params)
 
 if model_path:
     model, model_config = load_model(
@@ -196,12 +191,20 @@ shutil.copy("tester.py", model_save_path)
 #         )
 #     )
 
-
-run = wandb.init(
-    project="velmwheel",
-    config=model_config,
-    sync_tensorboard=True,
-)
+if args.wb_id:
+    run = wandb.init(
+        project="velmwheel",
+        config=model_config,
+        sync_tensorboard=True,
+        id=args.wb_id,
+        resume="allow",
+    )
+else:
+    run = wandb.init(
+        project="velmwheel",
+        config=model_config,
+        sync_tensorboard=True,
+    )
 
 wandb.define_metric("level")
 wandb.define_metric("episode_reward")

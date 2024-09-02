@@ -37,7 +37,7 @@ GLOBAL_GUIDANCE_COEFFS = RewardFuncCoeffs(
     success_reward=20.0,
     path_following_reward=5.0,
     distance_factor=2.5,
-    misalignment_factor=0.6,
+    misalignment_factor=0.1,
     rotation_velocity_penalty=-0.1,
     obstacle_penalty=-0.2,
 )
@@ -71,8 +71,6 @@ def calculate_reward(
     min_obstacle_dist: float,
     robot_w: float,
 ) -> tuple[bool, float, bool]:
-    success = False
-    terminated = False
     reward = 0.0
     if "NoGlobalGuidance" in variant:
         coeffs = NO_GLOBAL_GUIDANCE_COEFFS
@@ -81,8 +79,19 @@ def calculate_reward(
 
     # Robot collided with an obstacle
     if is_robot_collide:
-        terminated = True
         reward += coeffs.collision_penalty
+        return False, coeffs.collision_penalty, True
+
+    if "EasierFollowing" in variant:
+        threshold = (
+            difficulty.goal_reached_threshold
+            if is_final_goal
+            else difficulty.driving_in_path_tolerance
+        )
+    else:
+        threshold = difficulty.goal_reached_threshold
+    if robot_position.dist(goal) < threshold:
+        return True, coeffs.success_reward, True
 
     # Robot reached the maximum number of steps
     # if steps == max_episode_steps:
@@ -101,19 +110,6 @@ def calculate_reward(
     if abs(alpha) > np.pi / 6:
         reward += coeffs.misalignment_factor * (np.pi / 6 - abs(alpha))
 
-    if "EasierFollowing" in variant:
-        threshold = (
-            difficulty.goal_reached_threshold
-            if is_final_goal
-            else difficulty.driving_in_path_tolerance
-        )
-    else:
-        threshold = difficulty.goal_reached_threshold
-    if robot_position.dist(goal) < threshold:
-        reward += coeffs.success_reward
-        success = True
-        terminated = True
-
     if "NoGlobalGuidance" not in variant and num_passed_points > 0:
         # Add reward for reaching global guidance path points
         reward += coeffs.path_following_reward * num_passed_points
@@ -124,4 +120,4 @@ def calculate_reward(
         distance_component = coeffs.distance_factor * (d1 - d2)
         reward += distance_component
 
-    return success, reward, terminated
+    return False, reward, False

@@ -146,6 +146,7 @@ def create_model(
                 optimize_memory_usage=True,
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
                 policy_kwargs=policy_kwargs,
+                learning_rate=float(param_reader.read("actor_lr", "TD3")),
             )
 
             # model.actor.optimizer.param_groups[0]["weight_decay"] = 0.00001
@@ -158,14 +159,14 @@ def create_model(
                 param_reader.read("critic_lr", "TD3")
             )
         case "PPO":
-            # policy_kwargs = dict(net_arch=dict(pi=[256, 256], vf=[256, 128]))
+            policy_kwargs = dict(net_arch=dict(pi=[256, 256], vf=[256, 128]))
             model = PPO(
                 "MlpPolicy",
                 env,
                 verbose=1,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                # policy_kwargs=policy_kwargs,
+                policy_kwargs=policy_kwargs,
                 gamma=float(param_reader.read("gamma", "PPO")),
                 n_steps=int(param_reader.read("n_steps", "PPO")),
                 learning_rate=float(param_reader.read("learning_rate", "PPO")),
@@ -181,6 +182,9 @@ def create_model(
                 verbose=1,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
+                batch_size=512,
+                buffer_size=1000000,
+                learning_rate=0.0001,
             )
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
