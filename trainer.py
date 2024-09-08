@@ -9,6 +9,7 @@ import gymnasium as gym
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import VecNormalize
 
 import wandb
 from velmwheel_gym import *  # pylint: disable=wildcard-import, unused-wildcard-import
@@ -133,6 +134,7 @@ extra_params = dict(
     env_name=gym_env,
 )
 env = make_vec_env(gym_env, n_envs=envs, env_kwargs=extra_params)
+# env = VecNormalize(env, training=True, norm_obs=False, norm_reward=True)
 
 if model_path:
     model, model_config = load_model(

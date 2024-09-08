@@ -113,6 +113,8 @@ def run_once(start_pos, goal) -> dict:
             "obstacles": [],
         },
         "success": False,
+        "collided_at": None,
+        "timed_out_at": None,
     }
 
     start = time.time()
@@ -125,11 +127,14 @@ def run_once(start_pos, goal) -> dict:
     while True:
         action, _ = model.predict(obs, deterministic=True)
         run["actions"].append(action)
+        run["velocities"].append(env.env.robot_velocity)
 
         obs, reward, terminated, truncated, info = env.step(action)
 
         run["footprints"]["positions"].append(env.env.robot_position)
+        run["footprints"]["orientations"].append(env.env.robot_orientation)
         run["footprints"]["time"].append(start)
+        run["footprints"]["obstacles"].append(env.env.obstacles)
 
         # footprints["obstacles"].append(
         #     [(x, y) for x, y in zip(env.env.robot.env.dynamic_obstacles_x, env.env.robot.env.dynamic_obstacles_y)]
@@ -156,11 +161,13 @@ def run_once(start_pos, goal) -> dict:
 
         if terminated and reward < 0:
             print("Collision detected!")
+            run["collided_at"] = env.env.robot_position
             env.step([0.0, 0.0, 0.0])
             break
 
         if truncated:
             print("Max steps reached!")
+            run["timed_out_at"] = env.env.robot_position
             env.step([0.0, 0.0, 0.0])
             break
 
@@ -208,6 +215,7 @@ if args.benchmark:
     success_rate = 0.0
     attempts = 0
     combos = [(x, y) for x in points for y in points if x != y]
+    print(combos)
     for i in range(1):
         for start, goal in combos:
             attempts += 1

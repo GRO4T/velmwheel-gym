@@ -18,11 +18,14 @@ LIDAR_MAX_RANGE = 20.0
 # Maximum linear velocity of the robot
 MAX_LINEAR_VELOCITY = 0.5
 
+_GOAL_REACHED_THRESHOLD = 0.25
+_DRIVING_IN_PATH_TOLERANCE = 2.0
+
 # Navigation difficulty levels
 NAVIGATION_DIFFICULTIES = [
     NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
         dynamic_obstacles=[],
         dynamic_obstacle_motion=False,
         extend_segment=False,
@@ -32,8 +35,8 @@ NAVIGATION_DIFFICULTIES = [
         maneuvers=[],
     ),
     NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
         dynamic_obstacles=[],
         dynamic_obstacle_motion=False,
         extend_segment=False,
@@ -43,8 +46,8 @@ NAVIGATION_DIFFICULTIES = [
         maneuvers=[],
     ),
     NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
         dynamic_obstacles=[],
         dynamic_obstacle_motion=False,
         extend_segment=False,
@@ -54,8 +57,8 @@ NAVIGATION_DIFFICULTIES = [
         maneuvers=[],
     ),
     NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
         dynamic_obstacles=[
             (0.0, 3.0),
             (0.0, -3.0),
@@ -70,8 +73,8 @@ NAVIGATION_DIFFICULTIES = [
         maneuvers=[],
     ),
     NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
         dynamic_obstacles=[
             (0.0, 3.0),
             (0.0, -3.0),
@@ -87,8 +90,8 @@ NAVIGATION_DIFFICULTIES = [
         maneuvers=[],
     ),
     NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
         dynamic_obstacles=[
             (0.0, 3.0),
             (0.0, -3.0),
@@ -104,8 +107,8 @@ NAVIGATION_DIFFICULTIES = [
         maneuvers=[],
     ),
     NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
         dynamic_obstacles=[
             (0.0, 3.0),
             (0.0, -3.0),
@@ -121,8 +124,8 @@ NAVIGATION_DIFFICULTIES = [
         maneuvers=[],
     ),
     NavigationDifficulty(
-        goal_reached_threshold=0.25,
-        driving_in_path_tolerance=1.0,
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
         dynamic_obstacles=[
             (0.0, 3.0),
             (0.0, -3.0),
@@ -137,28 +140,52 @@ NAVIGATION_DIFFICULTIES = [
         raw_lidar_ray_count=180,
         maneuvers=[],
     ),
-    # NavigationDifficulty(
-    #     goal_reached_threshold=0.25,
-    #     driving_in_path_tolerance=1.0,
-    #     dynamic_obstacles=[
-    #         (0.0, 0.0),
-    #         (-2.0, -5.0),
-    #         (-3.0, -5.0),
-    #         (-4.0, -5.0),
-    #     ],
-    #     dynamic_obstacle_motion=False,
-    #     extend_segment=True,
-    #     starting_rect=(Point(-9.0, 9.0), Point(-9.0, 9.0)),
-    #     goal_rect=(Point(-9.0, 9.0), Point(-9.0, 9.0)),
-    #     raw_lidar_ray_count=180,
-    #     maneuvers=[
-    #         (Point(-3.5, -2.0), Point(-3.5, 0.75)),
-    #         # (Point(-8.0, -8.0), Point(3.0, -9.0)),
-    #         (Point(0.0, -2.0), Point(0.0, 2.0)),
-    #         (Point(0.0, -5.0), Point(-5.0, -5.0)),
-    #         (Point(8.0, 1.0), Point(3.0, 1.0)),
-    #     ],
-    # ),
+    NavigationDifficulty(
+        goal_reached_threshold=_GOAL_REACHED_THRESHOLD,
+        driving_in_path_tolerance=_DRIVING_IN_PATH_TOLERANCE,
+        dynamic_obstacles=[
+            (0.0, 0.0),
+            (-2.0, -5.0),
+            (-3.0, -5.0),
+            (-4.0, -5.0),
+        ],
+        dynamic_obstacle_motion=False,
+        extend_segment=True,
+        starting_rect=(Point(-9.0, 9.0), Point(-9.0, 9.0)),
+        goal_rect=(Point(-9.0, 9.0), Point(-9.0, 9.0)),
+        raw_lidar_ray_count=180,
+        maneuvers=[
+            # obstacles
+            (Point(0.0, -2.0), Point(0.0, 2.0)),
+            (Point(0.0, 2.0), Point(0.0, -2.0)),
+            (Point(-2.0, 0.0), Point(2.0, 0.0)),
+            (Point(2.0, 0.0), Point(-2.0, 0.0)),
+            (Point(2.0, 2.0), Point(-2.0, -2.0)),
+            (Point(-2.0, -2.0), Point(2.0, 2.0)),
+            (Point(-2.0, 2.0), Point(2.0, -2.0)),
+            (Point(2.0, -2.0), Point(-2.0, 2.0)),
+            (Point(2.0, 2.0), Point(-2.0, -2.0)),
+            (Point(-2.0, -2.0), Point(2.0, 2.0)),
+            (Point(0.0, -5.0), Point(-5.0, -5.0)),
+            (Point(-5.0, -5.0), Point(0.0, -5.0)),
+            # turns
+            (Point(7.0, 4.0), Point(3.0, 7.0)),
+            (Point(3.0, 7.0), Point(7.0, 4.0)),
+            (Point(-7.0, 4.0), Point(-3.0, 7.0)),
+            (Point(-3.0, 7.0), Point(-7.0, 4.0)),
+            (Point(-4.0, -7.0), Point(-7.0, -4.0)),
+            (Point(-7.0, -4.0), Point(-4.0, -7.0)),
+            # gates
+            (Point(1.0, -7.0), Point(1.0, -5.0)),
+            (Point(5.0, -7.0), Point(5.0, -5.0)),
+            (Point(1.0, -5.0), Point(1.0, -7.0)),
+            (Point(5.0, -5.0), Point(5.0, -7.0)),
+            (Point(-7.0, -4.0), Point(-4.0, -4.0)),
+            (Point(-4.0, -4.0), Point(-7.0, -4.0)),
+            (Point(-4.0, 2.0), Point(-7.0, 2.0)),
+            (Point(-7.0, 2.0), Point(-4.0, 2.0)),
+        ],
+    ),
 ]
 
 STATS_BUFFER_SIZE = 50

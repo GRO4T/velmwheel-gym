@@ -69,6 +69,20 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         return np.array((self.robot.xr, self.robot.yr))
 
     @property
+    def robot_orientation(self) -> float:
+        return self.robot.thr
+
+    @property
+    def obstacles(self) -> list[tuple[float, float]]:
+        return list(
+            zip(self.robot.env.dynamic_obstacles_x, self.robot.env.dynamic_obstacles_y)
+        )
+
+    @property
+    def robot_velocity(self) -> np.array:
+        return np.array((self._vx, self._vy))
+
+    @property
     def starting_position(self) -> Point:
         return Point(self.xr0, self.yr0)
 

@@ -129,7 +129,7 @@ def create_model(
                 decay_steps=int(param_reader.read("noise_decay_steps", "TD3")),
             )
             policy_kwargs = dict(
-                # net_arch=dict(pi=[800, 600], qf=[800, 600]),
+                # net_arch=dict(pi=[1024, 512, 256], qf=[1024, 512, 256]),
             )
             model = TD3(
                 "MlpPolicy",
@@ -182,9 +182,9 @@ def create_model(
                 verbose=1,
                 tensorboard_log="./logs/tensorboard",
                 device="cuda",
-                batch_size=512,
+                batch_size=1024,
                 buffer_size=1000000,
-                learning_rate=0.0001,
+                learning_rate=0.0003,
             )
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
@@ -204,6 +204,7 @@ def _get_wb_run_params(model: BaseAlgorithm, param_reader: ParameterReader) -> d
         "algorithm": algorithm,
         "total_timesteps": int(param_reader.read("timesteps")),
         "policy_type": "MlpPolicy",
+        "run_id": param_reader.read("run_id"),
     }
 
     match algorithm:
@@ -252,6 +253,8 @@ def load_model(
                 learning_starts=int(param_reader.read("learning_starts", "TD3")),
                 batch_size=int(param_reader.read("batch_size", "TD3")),
             )
+
+            # model.action_noise._target_sigma = 0.5 * np.ones(3)
 
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
