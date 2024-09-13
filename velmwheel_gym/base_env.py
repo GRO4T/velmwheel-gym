@@ -44,7 +44,7 @@ class VelmwheelBaseEnv(gym.Env):
                     low=-1.0,
                     high=1.0,
                     shape=(
-                        5
+                        4
                         + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS
                         + TARGET_LIDAR_RAY_COUNT,
                     ),
@@ -145,10 +145,11 @@ class VelmwheelBaseEnv(gym.Env):
 
     def _relative_to_robot(self, obs: np.array) -> np.array:
         robot_position = self.robot_position
-        obs[2] -= robot_position[0]
-        obs[3] -= robot_position[1]
+        obs[1] -= robot_position[0]
+        obs[2] -= robot_position[1]
         if "NoGlobalGuidance" not in self._variant:
-            global_path_start_idx = 5 if "EasierFollowing" in self._variant else 4
+            # global_path_start_idx = 3  # 5 if "EasierFollowing" in self._variant else 4
+            global_path_start_idx = 4
             for i in range(
                 global_path_start_idx,
                 global_path_start_idx + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS,
@@ -159,11 +160,12 @@ class VelmwheelBaseEnv(gym.Env):
         return obs
 
     def _normalize_observation(self, obs: np.array) -> np.array:
-        obs[1] /= np.pi
+        obs[0] /= np.pi
+        obs[1] /= COORDINATES_NORMALIZATION_FACTOR
         obs[2] /= COORDINATES_NORMALIZATION_FACTOR
-        obs[3] /= COORDINATES_NORMALIZATION_FACTOR
         if "NoGlobalGuidance" not in self._variant:
-            global_path_start_idx = 5 if "EasierFollowing" in self._variant else 4
+            # global_path_start_idx = 3  # 5 if "EasierFollowing" in self._variant else 4
+            global_path_start_idx = 4
             for i in range(
                 global_path_start_idx,
                 global_path_start_idx + 2 * GLOBAL_GUIDANCE_OBSERVATION_POINTS,

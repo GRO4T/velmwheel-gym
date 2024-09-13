@@ -35,11 +35,11 @@ GLOBAL_GUIDANCE_COEFFS = RewardFuncCoeffs(
     collision_penalty=-20.0,
     timeout_penalty=-20.0,
     success_reward=20.0,
-    path_following_reward=5.0,
-    distance_factor=2.5,
-    misalignment_factor=0.1,
-    rotation_velocity_penalty=-0.1,
-    obstacle_penalty=-0.2,
+    path_following_reward=1.0,
+    distance_factor=0.5,
+    misalignment_factor=0.001,
+    rotation_velocity_penalty=-0.002,
+    obstacle_penalty=-0.003,
 )
 
 NO_GLOBAL_GUIDANCE_COEFFS = RewardFuncCoeffs(
@@ -119,5 +119,7 @@ def calculate_reward(
         d2 = robot_position.dist(goal)
         distance_component = coeffs.distance_factor * (d1 - d2)
         reward += distance_component
+
+    reward += -0.0001
 
     return False, reward, False

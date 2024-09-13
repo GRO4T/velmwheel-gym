@@ -11,6 +11,19 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 
 from velmwheel_rl.noise import OrnsteinUhlenbeckActionNoiseWithDecay
 
+# class MyTD3(TD3):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+
+#     def predict(self, observation, state=None, episode_start=None, deterministic=False):
+#         action, next_hidden_state = super().predict(
+#             observation, state, episode_start, deterministic
+#         )
+#         min_obstacle_dist = abs(observation[-45:]).min() * 20.0
+#         if np.random.rand() < 0.1 and min_obstacle_dist < 0.7:
+#             action = np.array([np.random.uniform(-1.0, 1.0, 3)])
+#         return action, next_hidden_state
+
 
 class ParameterReader:
     def __init__(
@@ -98,9 +111,9 @@ def create_model(
                 delay_decay_for=int(param_reader.read("learning_starts", "DDPG"))
                 - 200000,
             )
-            # policy_kwargs = dict(
-            #     net_arch=dict(pi=[400, 300], qf=[200, 150]),
-            # )
+            policy_kwargs = dict(
+                net_arch=dict(pi=[800, 300], qf=[200, 150]),
+            )
             model = DDPG(
                 "MlpPolicy",
                 env,
@@ -129,7 +142,7 @@ def create_model(
                 decay_steps=int(param_reader.read("noise_decay_steps", "TD3")),
             )
             policy_kwargs = dict(
-                # net_arch=dict(pi=[1024, 512, 256], qf=[1024, 512, 256]),
+                net_arch=dict(pi=[800, 600], qf=[200, 150]),
             )
             model = TD3(
                 "MlpPolicy",
@@ -147,6 +160,7 @@ def create_model(
                 replay_buffer_kwargs=dict(handle_timeout_termination=False),
                 policy_kwargs=policy_kwargs,
                 learning_rate=float(param_reader.read("actor_lr", "TD3")),
+                tau=float(param_reader.read("tau", "TD3")),
             )
 
             # model.actor.optimizer.param_groups[0]["weight_decay"] = 0.00001
@@ -219,6 +233,7 @@ def _get_wb_run_params(model: BaseAlgorithm, param_reader: ParameterReader) -> d
             wb_run_params["noise_decay_steps"] = param_reader.read(
                 "noise_decay_steps", algorithm
             )
+            wb_run_params["tau"] = param_reader.read("tau", algorithm)
 
     return wb_run_params
 
@@ -247,7 +262,7 @@ def load_model(
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
         case "TD3":
-            model = DDPG.load(
+            model = TD3.load(
                 model_path,
                 env=env,
                 learning_starts=int(param_reader.read("learning_starts", "TD3")),

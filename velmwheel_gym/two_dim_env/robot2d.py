@@ -135,7 +135,7 @@ class Robot2D:
         else:
             logger.debug("Calculating new global path")
             a_star = AStarPlanner(
-                self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.7
+                self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.69
             )
             px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
 

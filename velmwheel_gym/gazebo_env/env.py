@@ -220,6 +220,18 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
     def _global_path_segment(self, value: GlobalGuidancePath):
         self.__global_path_segment = value
 
+    @property
+    def robot_velocity(self) -> np.array:
+        return np.array([0.0, 0.0])  # TODO: Implement this
+
+    @property
+    def robot_orientation(self) -> float:
+        return self._robot.theta
+
+    @property
+    def obstacles(self) -> list[tuple[float, float]]:
+        return np.array([]), np.array([])  # TODO: Implement this
+
     def step(self, action):
         self.prev_robot_position = self.robot_position
         self._steps += 1

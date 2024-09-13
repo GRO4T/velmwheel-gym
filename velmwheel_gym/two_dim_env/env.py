@@ -163,7 +163,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         step_normalized = 2 * self._steps / self.max_episode_steps - 1
 
         obs = [
-            step_normalized,
+            # step_normalized,
             self.robot.thr,
             self.goal.x,
             self.goal.y,
@@ -227,6 +227,8 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             min_obstacle_dist,
             w,
         )
+        if not success and terminated:
+            reward = -20.0 - self._metrics.episode_reward
 
         self._metrics.episode_reward += reward
 

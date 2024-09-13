@@ -101,7 +101,6 @@ def run_once(start_pos, goal) -> dict:
     run = {
         "actions": [],
         "velocities": [],
-        "min_obstacle_dists": [],
         "min_goal_dist": math.inf,
         "start": start_pos,
         "end": goal,
@@ -215,7 +214,6 @@ if args.benchmark:
     success_rate = 0.0
     attempts = 0
     combos = [(x, y) for x in points for y in points if x != y]
-    print(combos)
     for i in range(1):
         for start, goal in combos:
             attempts += 1
