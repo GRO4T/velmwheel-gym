@@ -50,6 +50,11 @@ parser.add_argument(
     help="Benchmark the model",
     required=False,
 )
+parser.add_argument(
+    "--continue_benchmark",
+    action=argparse.BooleanOptionalAction,
+    help="Continue the run",
+)
 
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -203,6 +208,9 @@ def run_once(start_pos, goal) -> dict:
 
 
 runs = []
+if args.continue_benchmark:
+    with open("run.pkl", "rb") as f:
+        runs = pickle.load(f)
 
 if args.benchmark:
     points = [
@@ -230,6 +238,8 @@ if args.benchmark:
                 f"[benchmark] success_rate={round(success_rate, 2)} min_goal_dist={round(run['min_goal_dist'], 2)} i: {i} {start} -> {goal}: {success}"
             )
             runs.append(run)
+            with open("run.pkl", "wb") as f:
+                pickle.dump(runs, f)
 
 elif args.random:
     while True:

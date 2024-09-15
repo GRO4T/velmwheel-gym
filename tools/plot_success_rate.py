@@ -3,18 +3,25 @@ import sys
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib import cm
 
 run_file = str(sys.argv[1])
 
 with open(run_file, "rb") as f:
     runs = pickle.load(f)
 
+is_gazebo = True
+
 index = 1
 
 # footprints = run[index]["footprints"]
 # Plot the footprint
-img = plt.imread("tools/2d_background.png")
-plt.imshow(img, aspect="auto", extent=[-9, 9, -9, 9])
+if is_gazebo:
+    img = plt.imread("tools/test_map.png")
+    plt.imshow(img, aspect="auto", extent=[-10, 9, -11, 9], cmap=cm.bone)
+else:
+    img = plt.imread("tools/2d_background.png")
+    plt.imshow(img, aspect="auto", extent=[-9, 9, -9, 9])
 
 # Draw arrow from start to end
 for run in runs:
@@ -44,9 +51,20 @@ obstacles = [[]] * len(footprints["obstacles"][0])
 for i in range(len(footprints["obstacles"][0])):
     obstacles[i] = [p[i] for p in footprints["obstacles"]]
 # plt.colorbar()
-for obs in obstacles:
-    # plt.scatter([p[0] for p in obs], [p[1] for p in obs], c=diffs, cmap=cm2, s=250)
-    plt.scatter([p[0] for p in obs], [p[1] for p in obs], color="b", s=250)
+if is_gazebo:
+    with open("run_td3_best.pkl", "rb") as f:
+        runs_tmp = pickle.load(f)
+    footprints = runs_tmp[0]["footprints"]
+    obstacles = [[]] * len(footprints["obstacles"][0])
+    for i in range(len(footprints["obstacles"][0])):
+        obstacles[i] = [p[i] for p in footprints["obstacles"]]
+    for obs in obstacles:
+        # plt.scatter([p[0] for p in obs], [p[1] for p in obs], c=diffs, cmap=cm2, s=250)
+        plt.scatter([p[0] for p in obs], [p[1] for p in obs], color="b", s=250)
+else:
+    for obs in obstacles:
+        # plt.scatter([p[0] for p in obs], [p[1] for p in obs], c=diffs, cmap=cm2, s=250)
+        plt.scatter([p[0] for p in obs], [p[1] for p in obs], color="b", s=250)
 
     # color = "g" if run["success"] else "r"
 
@@ -66,7 +84,12 @@ for obs in obstacles:
 # # plt.plot(footprints["time"], vxs, color="r")
 # # plt.plot(footprints["time"], vys, color="g")
 # plt.plot(footprints["time"], thetas, color="b")
-plt.clim(0, 10)
-plt.xlim(-9, 9)
-plt.ylim(-9, 9)
+if is_gazebo:
+    plt.clim(0, 10)
+    plt.xlim(-10, 9)
+    plt.ylim(-11, 9)
+else:
+    plt.clim(0, 10)
+    plt.xlim(-9, 9)
+    plt.ylim(-9, 9)
 plt.show()

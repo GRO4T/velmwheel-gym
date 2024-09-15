@@ -77,6 +77,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         )
         self._renderer = GazeboDebugRenderer(window_title=self._name)
         self._replanning_count = 0
+        self._replanning_flag = False
 
         logger.debug("VelmwheelEnv created")
 
@@ -223,7 +224,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
 
     @property
     def robot_velocity(self) -> np.array:
-        return np.array([0.0, 0.0])  # TODO: Implement this
+        return np.array(self._robot.velocity)
 
     @property
     def robot_orientation(self) -> float:
@@ -351,7 +352,12 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
                 logger.debug("Did not reach global path segment in time")
                 self._replanning_count += 1
                 self._robot.move([0.0, 0.0, 0.0])
-                self._get_global_guidance_path_from_ros_navigation_stack()
+                self._global_path = None
+                self._replanning_flag = True
+                while self._global_path is None:
+                    rclpy.spin_once(self._node, timeout_sec=1.0)
+                    print("Waiting for global path")
+                self._replanning_flag = False
                 (
                     self._global_path.points,
                     self._global_path_segment,
@@ -564,6 +570,8 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         return True
 
     def _global_planner_callback(self, message: Path):
+        print("Global path received")        
+        print(self._global_path)
         if self._global_path:  # update path only at the start of the episode
             return
 
@@ -572,18 +580,19 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             for pose_stamped in message.poses
         ]
 
-        if not points:
+        if not points or not self.starting_position or not self.goal:
+            print("No points")
             return
 
         self._analyze_path(points)
 
-        if points[0].dist(self.starting_position) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
+        if not self._replanning_flag and points[0].dist(self.starting_position) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
             logger.warning(
                 f"Path rejected: First point in the path is not close to the starting position ({self.starting_position}): {points[0]}"
             )
             return
 
-        if points[-1].dist(self.goal) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
+        if not self._replanning_flag and points[-1].dist(self.goal) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
             logger.warning(
                 f"Path rejected: Last point in the path is not close to the goal ({self.goal}): {points[-1]}"  # pylint: disable=line-too-long
             )

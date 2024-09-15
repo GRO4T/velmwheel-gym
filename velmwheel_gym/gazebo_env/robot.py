@@ -28,6 +28,7 @@ LASER_SCAN_MATCHER_SET_POSE_TOPIC = "/velmwheel/laser_scan_matcher/set_pose"
 ENCODERS_SET_POSE_TOPIC = "/velmwheel/odom/encoders/set_pose"
 SET_ENTITY_STATE_TOPIC = "/set_entity_state"
 LIDAR_TOPIC = "/velmwheel/lidars/cloud/combined"
+ROBOT_VELOCITY_TOPIC = "/velmwheel/base/velocity"
 
 STALE_MEASUREMENT_TIMEOUT_SEC = 5
 STALE_MEASUREMENT_RECOVERY_TIMEOUT_SEC = 10
@@ -39,6 +40,7 @@ class VelmwheelRobot:
 
         self._is_collide: bool = False
         self._position: Optional[Point] = None
+        self._velocity: tuple[float, float, float] = (0.0, 0.0, 0.0)
         self._theta: float = None
         self._position_tstamp: float = 0.0
         self._lidar_pointcloud_raw: Optional[np.array] = None
@@ -99,11 +101,22 @@ class VelmwheelRobot:
             self._lidar_callback,
             qos_profile=qos_profile_sensor_data,
         )
+        self._velocity_sub = self._node.create_subscription(
+            Twist,
+            ROBOT_VELOCITY_TOPIC,
+            self._velocity_callback,
+            qos_profile=qos_profile_system_default,
+        )
 
     @property
     def position(self) -> Point:
         """Current robot's position"""
         return self._position
+
+    @property
+    def velocity(self) -> tuple[float, float, float]:
+        """Current robot's velocity."""
+        return self._velocity
 
     @property
     def theta(self) -> float:
@@ -320,3 +333,7 @@ class VelmwheelRobot:
         pose.position.y = position.y
         pose.position.z = 0.0
         self._encoders_set_pose_pub.publish(pose)
+    
+    def _velocity_callback(self, message: Twist):
+        self._velocity = (message.linear.x, message.linear.y, message.angular.z)
+        print(self._velocity)
