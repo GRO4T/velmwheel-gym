@@ -2,6 +2,7 @@
 
 import copy
 import logging
+import math
 import os
 import pickle
 from typing import NamedTuple
@@ -110,7 +111,13 @@ class Robot2D:
                 self.yr = self._start_position_and_goal_generator.starting_position.y
                 self.thr = self._start_position_and_goal_generator.starting_rotation
                 self.scanning()
-                if not self.is_crashed(threshold=0.7):
+                if self.is_crashed(threshold=0.7):
+                    continue
+                x = self._start_position_and_goal_generator.starting_position.x
+                y = self._start_position_and_goal_generator.starting_position.y
+                gx = self._start_position_and_goal_generator.goal.x
+                gy = self._start_position_and_goal_generator.goal.y
+                if math.dist((x, y), (gx, gy)) > 1:
                     break
 
         self.xg = self._start_position_and_goal_generator.goal.x
@@ -134,29 +141,27 @@ class Robot2D:
             )
         else:
             logger.debug("Calculating new global path")
-            a_star = AStarPlanner(
-                self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.69
-            )
-            px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
-
-            points = [Point(x, y) for x, y in zip(px, py)]
-            points = points[
-                ::-1
-            ]  # This implementation of A* returns the path in reverse order
-            self.global_path = GlobalGuidancePath(
-                Point(self.xr, self.yr), points, self._difficulty
-            )
-            # self._global_path_cache[
-            #     (Point(self.xr, self.yr), Point(self.xg, self.yg))
-            # ] = copy.deepcopy(self.global_path)
-            # with open("state/nav2_cache.pkl", "wb") as f:
-            #     pickle.dump(self._global_path_cache, f)
+            self.global_planning()
         self.global_path.points, self.global_path_segment = next_segment(
             self.global_path.points,
             [],
             Point(self.xr, self.yr),
             self._difficulty,
             self._global_path_segment_length,
+        )
+
+    def global_planning(self):
+        a_star = AStarPlanner(
+            self.env.o_static_grid_x, self.env.o_static_grid_y, 0.2, 0.69
+        )
+        px, py = a_star.planning(self.xr, self.yr, self.xg, self.yg)
+
+        points = [Point(x, y) for x, y in zip(px, py)]
+        points = points[
+            ::-1
+        ]  # This implementation of A* returns the path in reverse order
+        self.global_path = GlobalGuidancePath(
+            Point(self.xr, self.yr), points, self._difficulty
         )
 
     def step(self, vx, vy, w=0):
@@ -274,6 +279,15 @@ class Environment:
         if n > 0:
             xcs = [p[0] for p in self._difficulty.dynamic_obstacles]
             ycs = [p[1] for p in self._difficulty.dynamic_obstacles]
+
+        # for each obstacle generate a random position 2.5 meters from its initial position
+        if self._difficulty.dynamic_obstacle_motion:
+            for i in range(n):
+                if n > 0:
+                    x, y = self._random_point_without_robot_and_goal(
+                        xr, yr, rr, xg, yg, rg, r
+                    )
+                    gcs.append((x, y))
 
         self.dynamic_obstacles_orig_x = np.array(xcs)
         self.dynamic_obstacles_orig_y = np.array(ycs)

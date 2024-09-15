@@ -8,7 +8,9 @@ import numpy as np
 from velmwheel_gym.base_env import VelmwheelBaseEnv
 from velmwheel_gym.constants import (
     BASE_STEP_TIME,
+    LIDAR_MAX_RANGE,
     MAX_LINEAR_VELOCITY,
+    MAX_REPLANNING_ATTEMPTS,
     TARGET_LIDAR_RAY_COUNT,
 )
 from velmwheel_gym.gazebo_env.start_position_and_goal_generator import (
@@ -38,13 +40,16 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
             dT=BASE_STEP_TIME,
             difficulty=self._difficulty,
             global_path_segment_length=self._global_path_segment_length,
+            lidar_max_range=LIDAR_MAX_RANGE,
         )
 
         self.xr0 = 0
         self.yr0 = 0
+        self._replanning_count = 0
         self._renderer = Env2DRenderer(
             window_title=f"{self._env_name}_{self._variant}", display_lidar=False
         )
+        self._prev_min_obstacle_dist = 0.0
 
     @property
     def max_episode_steps(self) -> int:
@@ -254,7 +259,11 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
 
         obs = self._observe()
 
-        # if num_passed_points > 0:
+        # if (
+        #     num_passed_points > 0
+        #     and min_obstacle_dist < 1.5
+        #     and min_obstacle_dist < self._prev_min_obstacle_dist
+        # ):
         #     (
         #         self._global_path.points,
         #         self._global_path_segment,
@@ -266,30 +275,36 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         #         self._global_path_segment_length,
         #     )
 
+        self._prev_min_obstacle_dist = min_obstacle_dist
+
         info = {}
         if success and not self.is_final_goal:
             info["status"] = "segment_reached"
         elif self._steps == self.max_episode_steps:
             info["status"] = "max_steps_reached"
+        info["replanning_count"] = self._replanning_count
 
         return obs, reward, terminated, False, info
 
     def reset(self, seed=None, options=None):  # Return to initial state
         self._vx = 0.0
         self._vy = 0.0
+        self._prev_min_obstacle_dist = 0.0
         if self._steps >= self.max_episode_steps:
             self._generate_next_goal = True
-            if self.is_final_goal:
+            if self._replanning_count >= MAX_REPLANNING_ATTEMPTS:
                 logger.debug("Did not reach the final goal in time")
             elif self._difficulty.extend_segment:
                 self._generate_next_goal = False
                 logger.debug("Did not reach global path segment in time")
+                self._replanning_count += 1
+                self.robot.global_planning()
                 (
                     self._global_path.points,
                     self._global_path_segment,
                 ) = next_segment(
                     self._global_path.points,
-                    self._global_path_segment.points,
+                    [],
                     Point(*self.robot_position),
                     self._difficulty,
                     self._global_path_segment_length,
@@ -299,6 +314,7 @@ class Velmwheel2DEnv(VelmwheelBaseEnv):
         self._metrics.register_local_episode_start()
 
         if self._generate_next_goal:
+            self._replanning_count = 0
             self._metrics.register_global_episode_start()
             self._generate_next_goal = False
             self.robot.reset(options)

@@ -1,9 +1,12 @@
 import pickle
+import sys
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-with open("run.pkl", "rb") as f:
+run_file = str(sys.argv[1])
+
+with open(run_file, "rb") as f:
     runs = pickle.load(f)
 
 index = 1

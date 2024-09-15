@@ -1,20 +1,24 @@
 import pickle
+import sys
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-with open("run.pkl", "rb") as f:
-    run = pickle.load(f)
+run_file = str(sys.argv[1])
+index = int(sys.argv[2])
 
-index = 1
+with open(run_file, "rb") as f:
+    run = pickle.load(f)
 
 footprints = run[index]["footprints"]
 # Plot the footprint
 
-print(run[index]["actions"])
 vxs, vys, thetas = zip(*run[index]["actions"])
-print(vxs)
-# plt.plot(footprints["time"], vxs, color="r")
-# plt.plot(footprints["time"], vys, color="g")
-plt.plot(footprints["time"], thetas, color="b")
+start_time = footprints["time"][0]
+times = [t - start_time for t in footprints["time"]]
+plt.plot(times, vxs, color="r")
+plt.plot(times, vys, color="g")
+plt.plot(times, thetas, color="b")
+# Add a legend
+plt.legend(["Vx", "Vy", "Theta"])
 plt.show()

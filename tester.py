@@ -7,7 +7,7 @@ import time
 import gymnasium as gym
 
 from velmwheel_gym import *  # pylint: disable=wildcard-import, unused-wildcard-import
-from velmwheel_gym.constants import NAVIGATION_DIFFICULTIES
+from velmwheel_gym.constants import MAX_REPLANNING_ATTEMPTS, NAVIGATION_DIFFICULTIES
 from velmwheel_gym.logger import init_logging
 from velmwheel_gym.types import Point
 from velmwheel_rl.common import ParameterReader, bootstrap_argument_parser, load_model
@@ -166,9 +166,12 @@ def run_once(start_pos, goal) -> dict:
 
         if truncated:
             print("Max steps reached!")
-            run["timed_out_at"] = env.env.robot_position
-            env.step([0.0, 0.0, 0.0])
-            break
+            if info["replanning_count"] >= MAX_REPLANNING_ATTEMPTS:
+                run["timed_out_at"] = env.env.robot_position
+                env.step([0.0, 0.0, 0.0])
+                break
+            else:
+                env.reset()
 
         if dist_to_goal < run["min_goal_dist"]:
             run["min_goal_dist"] = dist_to_goal
@@ -185,6 +188,7 @@ def run_once(start_pos, goal) -> dict:
         end = time.time()
         elapsed = end - start
         start = end
+        total += elapsed
         # if elapsed < 0.050:
         #     time.sleep(0.050 - elapsed)
         print(f"fps: {1 / elapsed}")

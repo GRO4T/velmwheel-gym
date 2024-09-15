@@ -15,7 +15,7 @@ from rclpy.qos import qos_profile_system_default
 from std_srvs.srv import Empty, Trigger
 
 from velmwheel_gym.base_env import VelmwheelBaseEnv
-from velmwheel_gym.constants import BASE_STEP_TIME
+from velmwheel_gym.constants import BASE_STEP_TIME, MAX_REPLANNING_ATTEMPTS
 from velmwheel_gym.gazebo_env.renderer import GazeboDebugRenderer
 from velmwheel_gym.gazebo_env.robot import VelmwheelRobot
 from velmwheel_gym.gazebo_env.ros_utils import call_service, create_ros_service_client
@@ -76,6 +76,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             self._difficulty
         )
         self._renderer = GazeboDebugRenderer(window_title=self._name)
+        self._replanning_count = 0
 
         logger.debug("VelmwheelEnv created")
 
@@ -333,6 +334,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             info["status"] = "segment_reached"
         elif self._steps == self.max_episode_steps:
             info["status"] = "max_steps_reached"
+        info["replanning_count"] = self._replanning_count
 
         return obs, reward, terminated, False, info
 
@@ -341,11 +343,15 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         self._vx = 0.0
         self._vy = 0.0
         if self._steps >= self.max_episode_steps:
-            if self.is_final_goal:
+            self._generate_next_goal = True
+            if self._replanning_count >= MAX_REPLANNING_ATTEMPTS:
                 logger.debug("Did not reach the final goal in time")
-                self._generate_next_goal = True
-            else:
+            elif self._difficulty.extend_segment:
+                self._generate_next_goal = False
                 logger.debug("Did not reach global path segment in time")
+                self._replanning_count += 1
+                self._robot.move([0.0, 0.0, 0.0])
+                self._get_global_guidance_path_from_ros_navigation_stack()
                 (
                     self._global_path.points,
                     self._global_path_segment,
@@ -360,6 +366,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         self._metrics.register_local_episode_start()
 
         if self._generate_next_goal:
+            self._replanning_count = 0
             self._metrics.register_global_episode_start()
             self._generate_next_goal = False
             self._delete_entity_srv.request = DeleteEntity.Request()
@@ -489,7 +496,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
     def _observe(self) -> np.array:
         step_normalized = 2 * self._steps / self.max_episode_steps - 1
         obs = [
-            step_normalized,
+            # step_normalized,
             self._robot.theta,
             self.sub_goal.x,
             self.sub_goal.y,

@@ -1,3 +1,4 @@
+import math
 import pickle
 import sys
 
@@ -45,6 +46,7 @@ avg_rotational_speed = 0.0
 avg_path_length = 0.0
 avg_time = 0.0
 avg_min_goal_dist = 0.0
+avg_duration = 0.0
 
 success_rate = sum([run["success"] for run in runs]) / len(runs)
 collision_rate = sum([1 for run in runs if run["collided_at"] is not None]) / len(runs)
@@ -52,7 +54,10 @@ timeout_rate = sum([1 for run in runs if run["timed_out_at"] is not None]) / len
 avg_linear_speed = calculate_avg_linear_speed(runs)
 avg_rotational_speed = calculate_avg_rotational_speed(runs)
 avg_path_length = calculate_avg_path_length(runs)
-avg_min_goal_dist = sum([run["min_goal_dist"] for run in runs]) / len(runs)
+avg_min_goal_dist = sum(
+    [run["min_goal_dist"] for run in runs if run["min_goal_dist"] != math.inf]
+) / len(runs)
+avg_duration = sum([run["duration"] for run in runs]) / len(runs)
 
 success_rate = round(success_rate, 2)
 collision_rate = round(collision_rate, 2)
@@ -61,6 +66,7 @@ avg_linear_speed = round(avg_linear_speed, 2)
 avg_rotational_speed = round(avg_rotational_speed, 2)
 avg_path_length = round(avg_path_length, 2)
 avg_min_goal_dist = round(avg_min_goal_dist, 2)
+avg_duration = round(avg_duration, 2)
 
 print(f"Success rate: {success_rate}")
 print(f"Collision rate: {collision_rate}")
@@ -69,3 +75,4 @@ print(f"Avg. linear speed: {avg_linear_speed}")
 print(f"Avg. rotational speed: {avg_rotational_speed}")
 print(f"Avg. path length: {avg_path_length}")
 print(f"Avg. min goal dist: {avg_min_goal_dist}")
+print(f"Avg. duration: {avg_duration}")

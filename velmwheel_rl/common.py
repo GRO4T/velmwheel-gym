@@ -11,18 +11,39 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 
 from velmwheel_rl.noise import OrnsteinUhlenbeckActionNoiseWithDecay
 
-# class MyTD3(TD3):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
 
-#     def predict(self, observation, state=None, episode_start=None, deterministic=False):
-#         action, next_hidden_state = super().predict(
-#             observation, state, episode_start, deterministic
-#         )
-#         min_obstacle_dist = abs(observation[-45:]).min() * 20.0
-#         if np.random.rand() < 0.1 and min_obstacle_dist < 0.7:
-#             action = np.array([np.random.uniform(-1.0, 1.0, 3)])
-#         return action, next_hidden_state
+class MyTD3(TD3):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def predict(self, observation, state=None, episode_start=None, deterministic=False):
+        action, next_hidden_state = super().predict(
+            observation, state, episode_start, deterministic
+        )
+        min_obstacle_dist = abs((observation[-45:] + 1) * 10).min()
+        if not deterministic:
+            if np.random.rand() < 0.1 and min_obstacle_dist < 0.7:
+                action = np.array([np.random.uniform(-1.0, 1.0, 3)])
+            if min_obstacle_dist < 1.0:
+                action = 0.8 * action
+        return action, next_hidden_state
+
+
+class MySAC(SAC):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def predict(self, observation, state=None, episode_start=None, deterministic=False):
+        action, next_hidden_state = super().predict(
+            observation, state, episode_start, deterministic
+        )
+        min_obstacle_dist = abs((observation[-45:] + 1) * 10).min()
+        if not deterministic:
+            if np.random.rand() < 0.1 and min_obstacle_dist < 0.7:
+                action = np.array([np.random.uniform(-1.0, 1.0, 3)])
+            if min_obstacle_dist < 1.0:
+                action = 0.8 * action
+        return action, next_hidden_state
 
 
 class ParameterReader:
@@ -199,6 +220,8 @@ def create_model(
                 batch_size=1024,
                 buffer_size=1000000,
                 learning_rate=0.0003,
+                gamma=0.99,
+                tau=0.005,
             )
         case _:
             raise ValueError(f"Unknown algorithm: {algorithm}")
@@ -293,7 +316,14 @@ def load_model(
         case "PPO":
             model = PPO.load(model_path, env=env)
         case "SAC":
-            model = SAC.load(model_path, env=env)
+            model = SAC.load(
+                model_path,
+                env=env,
+                batch_size=1024,
+                learning_rate=0.0003,
+                tau=0.005,
+                gamma=0.99,
+            )
             if replay_buffer_path:
                 _load_replay_buffer(model, replay_buffer_path)
         case _:
