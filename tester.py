@@ -31,13 +31,6 @@ parser.add_argument(
     required=False,
 )
 parser.add_argument(
-    "--save_footprint",
-    type=str,
-    help="Save the robot footprint",
-    required=False,
-    default="false",
-)
-parser.add_argument(
     "--time_limit",
     type=int,
     help="Time limit for the episode",
@@ -54,6 +47,11 @@ parser.add_argument(
     "--continue_benchmark",
     action=argparse.BooleanOptionalAction,
     help="Continue the run",
+)
+parser.add_argument(
+    "--real_robot",
+    action=argparse.BooleanOptionalAction,
+    help="Use the real robot",
 )
 
 args = parser.parse_args()
@@ -74,7 +72,6 @@ goal_y = float(param_reader.read("goal_y"))
 start_x = float(param_reader.read("start_x"))
 start_y = float(param_reader.read("start_y"))
 render = param_reader.read("render")
-save_footprint = True if param_reader.read("save_footprint") == "true" else False
 time_limit = int(param_reader.read("time_limit"))
 
 init_logging(log_level)
@@ -95,6 +92,7 @@ env = gym.make(
         param_reader.read("global_path_segment_length", "VelmwheelGym")
     ),
     variant=param_reader.read("variant", "VelmwheelGym"),
+    is_real_robot=args.real_robot,
 )
 
 model, _ = load_model(

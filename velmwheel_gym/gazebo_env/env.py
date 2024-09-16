@@ -54,6 +54,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         super().__init__(**kwargs)
 
         self._real_time_factor: float = kwargs["real_time_factor"]
+        self._is_real_robot: bool = kwargs.get("is_real_robot", False)
         self.__global_path: GlobalGuidancePath = None
         self.__global_path_segment: GlobalGuidancePath = None
         if os.path.exists("state/nav2_cache.pkl"):
@@ -71,7 +72,7 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         self._delta = 0.001
 
         self._simulation_init()
-        self._robot = VelmwheelRobot()
+        self._robot = VelmwheelRobot(self._is_real_robot)
         self.__start_position_and_goal_generator = StartPositionAndGoalGenerator(
             self._difficulty
         )
@@ -85,38 +86,39 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         rclpy.init()
         self._node = rclpy.create_node(self.__class__.__name__)
 
-        self._is_sim_running_srv = create_ros_service_client(
-            self._node, Trigger, "/is_sim_running"
-        )
-        self._start_sim_srv = create_ros_service_client(
-            self._node, Empty, START_SIM_TOPIC
-        )
-        self._stop_sim_srv = create_ros_service_client(
-            self._node, Empty, STOP_SIM_TOPIC
-        )
-        self._restart_sim_srv = create_ros_service_client(
-            self._node, Empty, RESTART_SIM_TOPIC
-        )
+        if not self._is_real_robot:
+            self._is_sim_running_srv = create_ros_service_client(
+                self._node, Trigger, "/is_sim_running"
+            )
+            self._start_sim_srv = create_ros_service_client(
+                self._node, Empty, START_SIM_TOPIC
+            )
+            self._stop_sim_srv = create_ros_service_client(
+                self._node, Empty, STOP_SIM_TOPIC
+            )
+            self._restart_sim_srv = create_ros_service_client(
+                self._node, Empty, RESTART_SIM_TOPIC
+            )
 
-        is_sim_running = call_service(self._is_sim_running_srv).success
-        if not is_sim_running:
-            call_service(self._start_sim_srv)
+            is_sim_running = call_service(self._is_sim_running_srv).success
+            if not is_sim_running:
+                call_service(self._start_sim_srv)
 
-        self._reset_world_srv = create_ros_service_client(
-            self._node, Empty, RESET_WORLD_TOPIC
-        )
+            self._reset_world_srv = create_ros_service_client(
+                self._node, Empty, RESET_WORLD_TOPIC
+            )
 
-        self._spawn_entity_srv = create_ros_service_client(
-            self._node, SpawnEntity, SPAWN_ENTITY_TOPIC
-        )
+            self._spawn_entity_srv = create_ros_service_client(
+                self._node, SpawnEntity, SPAWN_ENTITY_TOPIC
+            )
 
-        self._delete_entity_srv = create_ros_service_client(
-            self._node, DeleteEntity, DELETE_ENTITY_TOPIC
-        )
+            self._delete_entity_srv = create_ros_service_client(
+                self._node, DeleteEntity, DELETE_ENTITY_TOPIC
+            )
 
-        self._set_entity_state_srv = create_ros_service_client(
-            self._node, SetEntityState, SET_ENTITY_STATE_TOPIC
-        )
+            self._set_entity_state_srv = create_ros_service_client(
+                self._node, SetEntityState, SET_ENTITY_STATE_TOPIC
+            )
 
         self._navigation_goal_pub = self._node.create_publisher(
             PoseStamped,
@@ -270,8 +272,11 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
                 call_service(self._set_entity_state_srv)
 
         if not self._robot.update():
-            logger.warning("Robot update failed. Restarting the simulation.")
-            self._simulation_reinit()
+            if not self._is_real_robot:
+                logger.warning("Robot update failed. Restarting the simulation.")
+                self._simulation_reinit()
+            else:
+                logger.warning("Robot update failed.")
             return None, 0, True, False, {}
 
         num_passed_points = self._global_path_segment.update(self._robot.position)
@@ -375,10 +380,11 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             self._replanning_count = 0
             self._metrics.register_global_episode_start()
             self._generate_next_goal = False
-            self._delete_entity_srv.request = DeleteEntity.Request()
-            self._delete_entity_srv.request.name = "goal"
-            call_service(self._delete_entity_srv)
-            call_service(self._reset_world_srv)
+            if not self._is_real_robot:
+                self._delete_entity_srv.request = DeleteEntity.Request()
+                self._delete_entity_srv.request.name = "goal"
+                call_service(self._delete_entity_srv)
+                call_service(self._reset_world_srv)
 
             if options and "goal" in options and "starting_position" in options:
                 if self._training_mode:
@@ -394,11 +400,15 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
                 self._start_position_and_goal_generator.generate_next()
 
             while not self._robot.reset(self.starting_position):
-                logger.warning("Robot reset failed. Restarting the simulation.")
-                self._simulation_reinit()
+                if not self._is_real_robot:
+                    logger.warning("Robot reset failed. Restarting the simulation.")
+                    self._simulation_reinit()
+                else:
+                    logger.warning("Robot reset failed. Trying again.")
 
             self._get_global_path()
-            self._spawn_random_obstacles()
+            if not self._is_real_robot:
+                self._spawn_random_obstacles()
 
             self._robot.position_tstamp = time.time()
             self._robot.lidar_tstamp = time.time()
@@ -480,7 +490,8 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
             self._difficulty,
             self._global_path_segment_length,
         )
-        self._publish_goal_marker()
+        if not self._is_real_robot:
+            self._publish_goal_marker()
 
     def _get_global_guidance_path_from_cache(self):
         logger.debug(
@@ -496,13 +507,16 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         )
         self._global_path = None
         while not self._wait_for_new_path(WAIT_FOR_NEW_PATH_TIMEOUT_SEC):
-            logger.warning("Simulation in a bad state. Restarting the simulation.")
-            self._simulation_reinit()
+            if self._is_real_robot:
+                logger.warning("Simulation in a bad state. Restarting the simulation.")
+                self._simulation_reinit()
+            else:
+                logger.warning("Failed to get a new path.")
 
     def _observe(self) -> np.array:
         step_normalized = 2 * self._steps / self.max_episode_steps - 1
         obs = [
-            # step_normalized,
+            step_normalized,
             self._robot.theta,
             self.sub_goal.x,
             self.sub_goal.y,
@@ -570,8 +584,6 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
         return True
 
     def _global_planner_callback(self, message: Path):
-        print("Global path received")        
-        print(self._global_path)
         if self._global_path:  # update path only at the start of the episode
             return
 
@@ -586,13 +598,22 @@ class VelmwheelGazeboEnv(VelmwheelBaseEnv):
 
         self._analyze_path(points)
 
-        if not self._replanning_flag and points[0].dist(self.starting_position) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
+        if (
+            not self._is_real_robot
+            and not self._replanning_flag
+            and points[0].dist(self.starting_position)
+            > MAP_FRAME_POSITION_ERROR_TOLERANCE
+        ):
             logger.warning(
                 f"Path rejected: First point in the path is not close to the starting position ({self.starting_position}): {points[0]}"
             )
             return
 
-        if not self._replanning_flag and points[-1].dist(self.goal) > MAP_FRAME_POSITION_ERROR_TOLERANCE:
+        if (
+            not self._is_real_robot
+            and not self._replanning_flag
+            and points[-1].dist(self.goal) > MAP_FRAME_POSITION_ERROR_TOLERANCE
+        ):
             logger.warning(
                 f"Path rejected: Last point in the path is not close to the goal ({self.goal}): {points[-1]}"  # pylint: disable=line-too-long
             )

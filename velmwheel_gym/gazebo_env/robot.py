@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 ROBOT_MOVEMENT_TOPIC = "/velmwheel/base/velocity_setpoint"
 ROBOT_POSE_SIMULATION_TOPIC = "/velmwheel/sim/pose"
+ROBOT_POSE_ODOM_TOPIC = "/velmwheel/odom/filtered/pose"
 ROBOT_COLLISION_TOPIC = "/velmwheel/contacts"
 ODOM_LASER_POSE_TOPIC = "/velmwheel/odom/laser/pose"
 LASER_SCAN_MATCHER_SET_POSE_TOPIC = "/velmwheel/laser_scan_matcher/set_pose"
@@ -35,7 +36,7 @@ STALE_MEASUREMENT_RECOVERY_TIMEOUT_SEC = 10
 
 
 class VelmwheelRobot:
-    def __init__(self):
+    def __init__(self, is_real_robot: bool = False):
         logger.debug("Creating VelmwheelRobot")
 
         self._is_collide: bool = False
@@ -51,6 +52,7 @@ class VelmwheelRobot:
         self._simulation_time: Optional[int] = None
         self._real_time_factor: float = 1.0
         self._ignore_collisions_until: float = 0.0
+        self._is_real_robot = is_real_robot
 
         self._ros_init()
 
@@ -59,42 +61,53 @@ class VelmwheelRobot:
     def _ros_init(self):
         self._node = rclpy.create_node(self.__class__.__name__)
         # services
-        self._laser_scan_matcher_set_pose_srv = create_ros_service_client(
-            self._node, SetPose, LASER_SCAN_MATCHER_SET_POSE_TOPIC
-        )
-        self._set_entity_pose_srv = create_ros_service_client(
-            self._node, SetEntityState, SET_ENTITY_STATE_TOPIC
-        )
+        if not self._is_real_robot:
+            self._laser_scan_matcher_set_pose_srv = create_ros_service_client(
+                self._node, SetPose, LASER_SCAN_MATCHER_SET_POSE_TOPIC
+            )
+            self._set_entity_pose_srv = create_ros_service_client(
+                self._node, SetEntityState, SET_ENTITY_STATE_TOPIC
+            )
         # publishers
         self._movement_pub = self._node.create_publisher(
             Twist,
             ROBOT_MOVEMENT_TOPIC,
             qos_profile=qos_profile_system_default,
         )
-        self._encoders_set_pose_pub = self._node.create_publisher(
-            Pose,
-            ENCODERS_SET_POSE_TOPIC,
-            qos_profile=qos_profile_system_default,
-        )
+        if not self._is_real_robot:
+            self._encoders_set_pose_pub = self._node.create_publisher(
+                Pose,
+                ENCODERS_SET_POSE_TOPIC,
+                qos_profile=qos_profile_system_default,
+            )
         # subscribers
-        self._collision_sub = self._node.create_subscription(
-            ContactState,
-            ROBOT_COLLISION_TOPIC,
-            self._collision_callback,
-            qos_profile=qos_profile_system_default,
-        )
+        if not self._is_real_robot:
+            self._collision_sub = self._node.create_subscription(
+                ContactState,
+                ROBOT_COLLISION_TOPIC,
+                self._collision_callback,
+                qos_profile=qos_profile_system_default,
+            )
         self._odom_laser_pose_sub = self._node.create_subscription(
             PoseStamped,
             ODOM_LASER_POSE_TOPIC,
             self._odom_laser_pose_callback,
             qos_profile=qos_profile_system_default,
         )
-        self._position_sub = self._node.create_subscription(
-            PoseStamped,
-            ROBOT_POSE_SIMULATION_TOPIC,
-            self._position_callback,
-            qos_profile=qos_profile_system_default,
-        )
+        if not self._is_real_robot:
+            self._position_sub = self._node.create_subscription(
+                PoseStamped,
+                ROBOT_POSE_SIMULATION_TOPIC,
+                self._position_callback,
+                qos_profile=qos_profile_system_default,
+            )
+        else:
+            self._position_sub = self._node.create_subscription(
+                PoseStamped,
+                ROBOT_POSE_ODOM_TOPIC,
+                self._position_callback,
+                qos_profile=qos_profile_system_default,
+            )
         self._lidar_sub = self._node.create_subscription(
             PointCloud2,
             LIDAR_TOPIC,
@@ -181,9 +194,10 @@ class VelmwheelRobot:
                 logger.warning("Failed to reset robot's state")
                 return False
 
-        self._set_entity_pose(starting_position)
-        self._set_laser_scan_matcher_pose(starting_position)
-        self._set_encoders_pose(starting_position)
+        if not self._is_real_robot:
+            self._set_entity_pose(starting_position)
+            self._set_laser_scan_matcher_pose(starting_position)
+            self._set_encoders_pose(starting_position)
 
         self._position = None
         self._lidar_data = None
