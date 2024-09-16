@@ -121,13 +121,12 @@ def run_once(start_pos, goal) -> dict:
         "timed_out_at": None,
     }
 
-    start = time.time()
-    total = 0.0
-
     options = (
         None if start_pos is None else {"starting_position": start_pos, "goal": goal}
     )
     obs, _ = env.reset(options=options)
+    start = time.time()
+    total = 0.0
     while True:
         action, _ = model.predict(obs, deterministic=True)
         run["actions"].append(action)
@@ -198,10 +197,10 @@ def run_once(start_pos, goal) -> dict:
         #     time.sleep(0.050 - elapsed)
         print(f"fps: {1 / elapsed}")
 
-        if total > time_limit:
-            print("Time limit reached!")
-            env.step([0.0, 0.0, 0.0])
-            break
+        # if total > time_limit:
+        #     print("Time limit reached!")
+        #     env.step([0.0, 0.0, 0.0])
+        #     break
 
     run["duration"] = total
     return run
@@ -228,6 +227,7 @@ if args.benchmark:
     combos = [(x, y) for x in points for y in points if x != y]
     for i in range(1):
         for start, goal in combos:
+            time.sleep(1)
             attempts += 1
             run = run_once(start, goal)
             success = "success" if run["success"] else "failure"

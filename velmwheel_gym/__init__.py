@@ -40,9 +40,9 @@ register(
 )
 
 register(
-    id="Velmwheel2000-v0",
+    id="Velmwheel10000-v0",
     entry_point="velmwheel_gym.gazebo_env.env:VelmwheelGazeboEnv",
-    max_episode_steps=2000,
+    max_episode_steps=10000,
     additional_wrappers=(MaxEpisodeStepsInjectionWrapper.wrapper_spec(),),
 )
 

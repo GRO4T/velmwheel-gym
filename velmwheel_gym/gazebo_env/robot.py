@@ -154,8 +154,9 @@ class VelmwheelRobot:
     @property
     def is_collide(self) -> bool:
         """Flag signalling whether robot's is in collision with an obstacle."""
+        # return self._is_collide
         min_obstacle_dist = min(self._lidar_data)
-        return min_obstacle_dist < 0.6
+        return min_obstacle_dist < 0.6 and self._is_collide
 
     @property
     def real_time_factor(self) -> float:
@@ -333,7 +334,7 @@ class VelmwheelRobot:
         pose.position.y = position.y
         pose.position.z = 0.0
         self._encoders_set_pose_pub.publish(pose)
-    
+
     def _velocity_callback(self, message: Twist):
         self._velocity = (message.linear.x, message.linear.y, message.angular.z)
         print(self._velocity)
